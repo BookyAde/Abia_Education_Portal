@@ -2,4 +2,4 @@ streamlit
 pandas
 sqlalchemy
 psycopg2-binary
-streamlit-option-menu   <-- THIS IS THE MISSING ONE
+streamlit-option-menu
