@@ -123,7 +123,7 @@ elif selected == "Admin Panel":
 elif selected == "About Creator":
     st.markdown(
         "<div class='card'><h2>Creator: BookyAde</h2>"
-        "<p>Final Year Computer Science Student<br>Turned a class project into a real government tool for Abia State.<br><br>"
+        "<p>A Participant of Techrise Cohort 2.0<br>Turned a class project into a real government tool for Abia State.<br><br>"
         "GitHub: github.com/BookyAde<br>Email: alabiwinner9@gmail.com</p></div>",
         unsafe_allow_html=True
     )
