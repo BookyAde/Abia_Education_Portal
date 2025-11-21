@@ -3,7 +3,7 @@ import streamlit as st
 from PIL import Image
 from streamlit_option_menu import option_menu
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import io
 import os
 import smtplib
@@ -145,7 +145,7 @@ def save_school_submission(school_name, lga_name, enrollment_total, teachers_tot
 
     try:
         with engine.connect() as conn:
-            conn.execute(query, params)
+            conn.execute(text(query), params)
         return True
     except Exception as e:
         st.error(f"Failed to submit data: {e}")
