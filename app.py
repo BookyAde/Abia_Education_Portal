@@ -131,12 +131,21 @@ def save_school_submission(school_name, lga_name, enrollment_total, teachers_tot
     query = """
         INSERT INTO school_submissions
         (school_name, lga_name, enrollment_total, teachers_total, submitted_by, email, submitted_at, approved)
-        VALUES (%s, %s, %s, %s, %s, %s, NOW(), NULL)
+        VALUES (:school_name, :lga_name, :enrollment_total, :teachers_total, :submitted_by, :email, NOW(), NULL)
     """
+
+    params = {
+        'school_name': school_name,
+        'lga_name': lga_name,
+        'enrollment_total': enrollment_total,
+        'teachers_total': teachers_total,
+        'submitted_by': submitted_by,
+        'email': email
+    }
 
     try:
         with engine.connect() as conn:
-            conn.execute(query, (school_name, lga_name, enrollment_total, teachers_total, submitted_by, email))
+            conn.execute(query, params)
         return True
     except Exception as e:
         st.error(f"Failed to submit data: {e}")
