@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 # Connect to your live Supabase database
-engine = create_engine(st.secrets["DATABASE_URL"])
+engine = create_engine(f"postgresql://{st.secrets['DB_USER']}:{st.secrets['DB_PASSWORD']}@{st.secrets['DB_HOST']}:{st.secrets['DB_PORT']}/{st.secrets['DB_NAME']}")
 
 st.set_page_config(page_title="Abia State Education Portal", layout="wide")
 
