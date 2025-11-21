@@ -280,6 +280,17 @@ elif selected == "Admin Panel":
                 with col1:
                     if st.button(f"Approve {row['id']}", key=f"a{row['id']}"):
                         engine.execute("UPDATE school_submissions SET approved=TRUE WHERE id=%s", (row['id'],))
+                        
+                        # NEW CODE: Insert approved data into fact_abia_metrics
+                        insert_query = """
+                            INSERT INTO dwh.fact_abia_metrics (lga_key, enrollment_total, teachers_total, approved)
+                            SELECT l.lga_key, %s, %s, TRUE
+                            FROM dwh.dim_lga l
+                            WHERE l.lga_name = %s
+                        """
+                        with engine.connect() as conn:
+                            conn.execute(insert_query, (row['enrollment_total'], row['teachers_total'], row['lga_name']))
+                        
                         send_email(
                             row['email'],
                             "Submission Approved",
