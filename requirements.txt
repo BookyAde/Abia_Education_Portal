@@ -1,5 +1,8 @@
 streamlit
+streamlit-option-menu
+streamlit-autorefresh
 pandas
 sqlalchemy
 psycopg2-binary
-streamlit-option-menu
+pillow
+xlsxwriter
