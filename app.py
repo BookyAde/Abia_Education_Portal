@@ -5,6 +5,7 @@ from streamlit_option_menu import option_menu
 import pandas as pd
 from sqlalchemy import create_engine
 import io
+import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -30,10 +31,12 @@ st.markdown(
 
 
 # ===================== DATABASE CONNECTION =====================
+from sqlalchemy import create_engine
+
 engine = create_engine(
-    f"postgresql://{st.secrets['DB_USER']}:{st.secrets['DB_PASSWORD']}@"
-    f"{st.secrets['DB_HOST']}:{st.secrets['DB_PORT']}/{st.secrets['DB_NAME']}"
+    f"postgresql+pg8000://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
 )
+
 
 
 # ===================== CSS =====================
