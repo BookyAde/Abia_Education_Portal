@@ -23,7 +23,7 @@ st.markdown("""
 
 # =================== HEADER ===================
 st.markdown(
-    '<div class="header"><h1>🏛️ Abia State Real-Time Education & Health Portal</h1>'
+    '<div class="header"><h1>🏛️ Abia State Real-Time Education Portal</h1>'
     '<p>Live • Transparent • Government-Ready • Built by BookyAde</p></div>',
     unsafe_allow_html=True
 )
@@ -124,10 +124,10 @@ elif selected == "About Creator":
     st.markdown(
         "<div class='card'><h2>Creator: BookyAde</h2>"
         "<p>Final Year Computer Science Student<br>Turned a class project into a real government tool for Abia State.<br><br>"
-        "GitHub: github.com/BookyAde<br>Email: bookyade.abia@gmail.com</p></div>",
+        "GitHub: github.com/BookyAde<br>Email: alabiwinner9@gmail.com</p></div>",
         unsafe_allow_html=True
     )
     st.balloons()
 
 st.markdown("---")
-st.markdown("© 2025 BookyAde • Official Abia State Education & Health Monitoring Portal")
+st.markdown("© 2025 BookyAde • Official Abia State Education Monitoring Portal")
