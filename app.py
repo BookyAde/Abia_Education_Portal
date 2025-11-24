@@ -37,34 +37,6 @@ engine = create_engine(
     f"{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
 )
 
-# ===================== EPIC HERO HEADER WITH BIG LOGO =====================
-st.markdown(f"""
-<div style="text-align:center; padding:60px 20px; background:linear-gradient(135deg, #006400, #228B22, #32CD32); 
-    border-radius:30px; margin:20px 0; box-shadow:0 20px 50px rgba(0,100,0,0.4); color:white;">
-    <img src="https://raw.githubusercontent.com/BookyAde/abia-education-portal/main/assets/Abia_logo.jpeg" 
-         width="340" 
-         style="border-radius:50%; border:12px solid white; box-shadow:0 15px 40px rgba(0,0,0,0.6); margin-bottom:25px;">
-    <h1 style="font-size:68px; margin:0; text-shadow:4px 4px 15px rgba(0,0,0,0.7); font-weight:900;">
-        Abia State Education Portal
-    </h1>
-    <p style="font-size:30px; margin:15px 0 0; opacity:0.95;">
-        Official • Verified • Real-Time • Government-Ready
-    </p>
-    <p style="font-size:24px; margin-top:10px; font-weight:bold;">
-        1,900+ Verified Schools • All 17 LGAs • Live Data
-    </p>
-</div>
-
-<div style="text-align:center; margin:-20px 0 50px 0;">
-    <p style="color:#006400; font-size:22px; font-weight:bold;">
-        Built with Excellence by Alabi Winner (BookyAde)
-    </p>
-    <p style="color:#555; font-size:17px;">
-        Abia TechRice Cohort 2.0 • Class of 2025
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
 # ===================== STUNNING ANIMATED SIDEBAR =====================
 with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/commons/5/5f/Seal_of_Abia_State.svg", width=180)
