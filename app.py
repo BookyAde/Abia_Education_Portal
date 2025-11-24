@@ -391,45 +391,54 @@ elif selected == "Admin Panel":
 
 elif selected == "About":
     st.markdown("""
-    <div class='card' style='background:#f8fff8; border-left:8px solid #006400; padding:40px; border-radius:20px;'>
-        <h1 style='text-align:center; color:#006400; margin-bottom:30px;'>About the Abia State Education Portal</h1>
+    <div style="background:#f8fff8; padding:50px; border-radius:25px; border-left:10px solid #006400; text-align:center; box-shadow:0 10px 30px rgba(0,100,0,0.2);">
+        <h1 style="color:#006400; font-size:48px; margin-bottom:20px;">About the Portal</h1>
         
-        <div style='background:white; padding:35px; border-radius:18px; margin:30px 0; box-shadow:0 8px 25px rgba(0,0,0,0.1); text-align:center;'>
-            <h2 style='color:#006400; margin-bottom:20px;'>Our Mission & Vision</h2>
-            <p style='font-size:19px; line-height:1.9; color:#333; max-width:900px; margin:auto;'>
-                This portal is the <strong>first real-time, fully verified education data platform</strong> in Abia State history.<br><br>
-                We collect accurate enrollment and teacher data from <strong>every school across all 17 LGAs</strong>, verify it, and publish it live — 
-                giving the Ministry, parents, and citizens <strong>100% transparency</strong> for the first time.
-            </p>
-            <p style='font-size:22px; font-style:italic; color:#006400; margin:30px 0;'>
-                “No child left behind. No school left out.”
+        <p style="font-size:20px; color:#333; max-width:900px; margin:30px auto; line-height:1.9;">
+            This is the <strong>official real-time education data platform</strong> for Abia State — 
+            the first of its kind in Nigeria.
+        </p>
+
+        <div style="background:white; padding:35px; border-radius:20px; margin:40px auto; max-width:1000px; box-shadow:0 8px 25px rgba(0,0,0,0.1);">
+            <h2 style="color:#006400; margin-bottom:25px;">What This Portal Does</h2>
+            <p style="font-size:18px; color:#333; line-height:2;">
+                • Collects verified data from <strong>every school</strong> in all 17 LGAs<br>
+                • Displays live, accurate statistics — updated every minute<br>
+                • Ensures 100% transparency for the Ministry, parents, and citizens<br>
+                • All submissions are email-verified and admin-approved before going live
             </p>
         </div>
 
-        <div style='background:#e8f5e8; padding:40px; border-radius:18px; margin:40px 0; text-align:center;'>
-            <h2 style='color:#006400; margin-bottom:25px;'>Built with Excellence by</h2>
-            <h1 style='font-size:52px; color:#006400; margin:10px 0;'>Alabi Winner</h1>
-            <h3 style='color:#228B22; margin:5px 0;'>(BookyAde)</h3>
-            <p style='font-size:21px; color:#333; margin:25px 0; line-height:1.8;'>
+        <div style="background:#e8f5e8; padding:40px; border-radius:20px; margin:40px auto; max-width:900px;">
+            <h2 style="color:#006400; margin-bottom:20px;">Vision</h2>
+            <p style="font-size:24px; font-style:italic; color:#006400; line-height:1.8;">
+                “No child left behind.<br>No school left out.”
+            </p>
+        </div>
+
+        <div style="background:white; padding:50px; border-radius:25px; margin:50px auto; max-width:800px; box-shadow:0 12px 40px rgba(0,100,0,0.2);">
+            <h2 style="color:#006400; margin-bottom:25px;">Built with Excellence by</h2>
+            <h1 style="font-size:58px; color:#006400; margin:15px 0;">Alabi Winner</h1>
+            <h3 style="color:#228B22; margin:10px 0;">(BookyAde)</h3>
+            <p style="font-size:22px; color:#333; margin:30px 0; line-height:1.8;">
                 Abia TechRice Cohort 2.0 • Class of 2025<br>
                 Full-Stack Developer • Data Champion • Proud Son of Abia State
             </p>
-            <p style='margin:30px 0;'>
-                <a href="https://github.com/BookyAde" style="color:#006400; font-size:19px; margin:0 20px; font-weight:bold;">GitHub</a> • 
-                <a href="mailto:alabiwinner9@gmail.com" style="color:#006400; font-size:19px; margin:0 20px; font-weight:bold;">Email</a>
+            <p style="margin:35px 0;">
+                <a href="https://github.com/BookyAde" style="color:#006400; font-size:20px; margin:0 25px; font-weight:bold;">GitHub</a>
+                <a href="mailto:alabiwinner9@gmail.com" style="color:#006400; font-size:20px; margin:0 25px; font-weight:bold;">Email</a>
             </p>
-            <p style='font-style:italic; color:#006400; font-size:24px; margin-top:35px;'>
+            <p style="font-style:italic; color:#006400; font-size:26px; margin-top:40px;">
                 “I didn’t just build an app.<br>I built the future of education in Abia State.”
             </p>
         </div>
 
-        <div style='text-align:center; margin-top:50px; color:#006400;'>
-            <p style='font-size:19px; font-weight:bold;'>
-                © 2025 Abia State Education Portal • Official Government Initiative<br>
-                Powered by <strong>Abia TechRice</strong>
-            </p>
+        <div style="margin-top:60px; color:#006400; font-size:18px;">
+            <p><strong>© 2025 Abia State Education Portal</strong></p>
+            <p>Official Government Initiative • Powered by <strong>Abia TechRice</strong></p>
         </div>
     </div>
     """, unsafe_allow_html=True)
-    
+
+    # Celebration!
     st.balloons()
