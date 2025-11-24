@@ -12,6 +12,9 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from streamlit_autorefresh import st_autorefresh
 
+
+st.set_page_config(page_title="Abia State Education Portal", layout="wide", page_icon="")
+
 # ===================== DATABASE CONNECTION =====================
 engine = create_engine(
     f"postgresql+pg8000://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@"
