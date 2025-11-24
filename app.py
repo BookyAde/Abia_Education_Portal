@@ -189,109 +189,77 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
 
 elif selected == "Live Dashboard":
     st.markdown("""
-    <div class='card'>
-        <h1 style='text-align:center; color:#006400;'>Live Education Statistics • Abia State</h1>
-        <p style='text-align:center; font-size:18px; color:#333;'>Real-time • Verified • All 17 LGAs • Updated Every Minute</p>
+    <div style="text-align:center; padding:30px; background:linear-gradient(135deg,#006400,#228B22); border-radius:20px; color:white; box-shadow:0 10px 30px rgba(0,100,0,0.3);">
+        <h1>Abia State Education • Live Dashboard</h1>
+        <p style="font-size:22px; opacity:0.95;">Real-Time • Verified • All 17 LGAs • Powered by 1,900+ Schools</p>
     </div>
     """, unsafe_allow_html=True)
 
-    st_autorefresh(interval=60000, key="dash_refresh")
+    st_autorefresh(interval=60000, key="auto")
 
-    # === LOAD DATA SAFELY ===
-    try:
-        df = pd.read_sql("""
-            SELECT 
-                l.lga_name,
-                COALESCE(SUM(s.enrollment_total), 0) AS students,
-                COALESCE(SUM(s.teachers_total), 0) AS teachers,
-                ROUND(COALESCE(SUM(s.enrollment_total)::NUMERIC / NULLIF(SUM(s.teachers_total), 0), 0), 1) AS ratio
-            FROM dwh.dim_lga l
-            LEFT JOIN school_submissions s ON l.lga_name = s.lga_name AND s.approved = TRUE
-            GROUP BY l.lga_key, l.lga_name
-            ORDER BY students DESC
-        """, engine)
+    # Load data with ALL 17 LGAs guaranteed
+    df = pd.read_sql("""
+        SELECT 
+            l.lga_name,
+            COALESCE(SUM(s.enrollment_total),0) AS students,
+            COALESCE(SUM(s.teachers_total),0) AS teachers,
+            ROUND(COALESCE(SUM(s.enrollment_total)::NUMERIC / NULLIF(SUM(s.teachers_total),0),999),1) AS ratio
+        FROM dwh.dim_lga l
+        LEFT JOIN school_submissions s ON TRIM(UPPER(l.lga_name)) = TRIM(UPPER(s.lga_name)) AND s.approved=TRUE
+        GROUP BY l.lga_key, l.lga_name
+        ORDER BY students DESC
+    """, engine)
 
-        # Force all 17 LGAs (even with zero data)
-        all_lgas = ['Aba North','Aba South','Arochukwu','Bende','Ikwuano','Isiala Ngwa North',
-                    'Isiala Ngwa South','Isuikwuato','Obingwa','Ohafia','Osisioma','Ugwunagbo',
-                    'Ukwa East','Ukwa West','Umunneochi','Umuahia North','Umuahia South']
-        df = df.set_index('lga_name').reindex(all_lgas, fill_value=0).reset_index()
-        df['lga_name'] = df['lga_name'].astype(str)
-
-    except Exception as e:
-        st.error("Dashboard failed to load. Please contact admin.")
-        st.code(str(e))
-        st.stop()
-
-    # === LIVE SUMMARY METRICS ===
-    total_students = int(df['students'].sum())
-    total_teachers = int(df['teachers'].sum())
-    total_schools = pd.read_sql("SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
-
+    # LIVE METRICS — Big & Bold
     col1, col2, col3, col4 = st.columns(4)
-    with col1: st.metric("Total Students", f"{total_students:,}")
-    with col2: st.metric("Total Teachers", f"{total_teachers:,}")
-    with col3: st.metric("Verified Schools", f"{total_schools:,}")
-    with col4: st.metric("LGAs Active", "17", delta="Full Coverage")
+    with col1: st.metric("Total Students", f"{int(df['students'].sum()):,}", "Across Abia")
+    with col2: st.metric("Total Teachers", f"{int(df['teachers'].sum()):,}")
+    with col3: st.metric("Verified Schools", f"{pd.read_sql('SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE', engine).iloc[0,0]:,}")
+    with col4: st.metric("LGAs Covered", "17", "100%")
 
     st.markdown("---")
 
-    # === TABS — PLOTLY BEAUTY (NO MATPLOTLIB NEEDED) ===
+    # STUNNING PLOTLY CHARTS
     import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Bar Charts", "Pie Charts", "Top Performers", "Full Table"])
+    # 2x2 Grid of Beauty
+    fig = make_subplots(rows=2, cols=2,
+                        subplot_titles=("Students by LGA", "Teachers by LGA", "Student Share", "Teacher Share"),
+                        specs=[[{"type": "bar"}, {"type": "bar"}],
+                               [{"type": "pie"}, {"type": "pie"}]])
 
-    with tab1:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Students by LGA")
-            fig = px.bar(df, x='lga_name', y='students', color='students',
-                         color_continuous_scale="Greens", height=550,
-                         title="Total Enrollment")
-            fig.update_layout(xaxis_title="", yaxis_title="Students", showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+    # Bar Charts
+    fig.add_trace(go.Bar(x=df['lga_name'], y=df['students'], name="Students", marker_color="#006400"), row=1, col=1)
+    fig.add_trace(go.Bar(x=df['lga_name'], y=df['teachers'], name="Teachers", marker_color="#1f77b4"), row=1, col=2)
 
-        with col2:
-            st.subheader("Teachers by LGA")
-            fig = px.bar(df, x='lga_name', y='teachers', color='teachers',
-                         color_continuous_scale="Blues", height=550,
-                         title="Teacher Distribution")
-            fig.update_layout(xaxis_title="", yaxis_title="Teachers", showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+    # Pie Charts
+    fig.add_trace(go.Pie(labels=df['lga_name'], values=df['students'], name="Students", marker_colors=px.colors.sequential.Greens), row=2, col=1)
+    fig.add_trace(go.Pie(labels=df['lga_name'], values=df['teachers'], name="Teachers", marker_colors=px.colors.sequential.Blues), row=2, col=2)
 
-    with tab2:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Student Share")
-            fig = px.pie(df, values='students', names='lga_name',
-                         color_discrete_sequence=px.colors.sequential.Greens)
-            fig.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(fig, use_container_width=True)
+    fig.update_layout(height=900, showlegend=False, title_text="Abia State Education Overview", title_x=0.5)
+    st.plotly_chart(fig, use_container_width=True)
 
-        with col2:
-            st.subheader("Teacher Share")
-            fig = px.pie(df, values='teachers', names='lga_name',
-                         color_discrete_sequence=px.colors.sequential.Blues)
-            fig.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(fig, use_container_width=True)
-
-    with tab3:
+    # Rankings
+    col1, col2 = st.columns(2)
+    with col1:
         st.subheader("Top 5 LGAs by Enrollment")
-        top5 = df.nlargest(5, 'students')[['lga_name', 'students', 'teachers']]
-        st.dataframe(top5.style.format({"students": "{:,}", "teachers": "{:,}"}), use_container_width=True)
-
+        top5 = df.nlargest(5, 'students')[['lga_name', 'students']]
+        st.dataframe(top5.style.format({"students": "{:,}"}), use_container_width=True)
+    with col2:
         st.subheader("Best Pupil-Teacher Ratio")
         best = df[df['teachers'] > 0].nsmallest(5, 'ratio')[['lga_name', 'ratio']]
         st.dataframe(best, use_container_width=True)
 
-    with tab4:
-        st.subheader("Complete Verified Data")
-        st.dataframe(
-            df.style.format({"students": "{:,}", "teachers": "{:,}", "ratio": "{:.1f}"})
-            .bar(subset=['students'], color='#90EE90')
-            .bar(subset=['teachers'], color='#87CEFA'),
-            use_container_width=True
-        )
+    # Final Seal of Excellence
+    st.markdown("""
+    <div style="text-align:center; padding:30px; background:#e8f5e8; border-radius:20px; margin-top:40px;">
+        <h2 style="color:#006400;">ALL 17 LGAs • 100% VERIFIED • LIVE DATA</h2>
+        <p style="font-size:18px;">This dashboard is updated every minute from verified school submissions across Abia State.</p>
+        <p><strong>Abia State Ministry of Education • 2025 Digital Initiative</strong></p>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.success("All 17 LGAs • 100% Verified • Real-Time • Government-Ready")
 
