@@ -197,7 +197,7 @@ elif selected == "Request Data":
 
 elif selected == "Admin Panel":
     if not st.session_state.get("logged_in"):
-        st.warning("Please login using **admin / Booky123** from the Register/Login page")
+        st.warning("Please login as admin from the Register/Login page")
         st.stop()
 
     st.markdown("<div class='card'><h2>Administrator Control Panel</h2></div>", unsafe_allow_html=True)
