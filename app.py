@@ -209,16 +209,21 @@ elif selected == "Submit Data":
                     st.balloons()
 
 elif selected == "Request Data":
-    st.markdown("<div class='card'><h2>Request Full Dataset</h2></div>", unsafe_allow_html=True)
-    with st.form("request_form"):
-        name = st.text_input("Your Name")
-        email = st.text_input("Your Email")
-        purpose = st.text_area("Purpose of Request")
-        sent = st.form_submit_button("Send Dataset")
-        if sent:
-            excel = generate_excel_from_db()
-            if excel and send_email(email, "Abia Education Dataset", f"Hi {name},\n\nAttached is the approved dataset.\nPurpose: {purpose}", excel, "Abia_Education_Data.xlsx"):
-                st.success("Dataset sent to your email!")
+    st.markdown("<div class='card'><h2>Download Full Dataset</h2></div>", unsafe_allow_html=True)
+    st.info("Only approved submissions are included in the export.")
+
+    if st.button("Generate & Download Excel File"):
+        excel_file = generate_excel_from_db()
+        if excel_file:
+            st.download_button(
+                label="Download Abia_Education_Data.xlsx",
+                data=excel_file,
+                file_name="Abia_Education_Data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            st.success("File ready!")
+        else:
+            st.error("No approved data yet.")
 
 elif selected == "Admin Panel":
     st.markdown("<div class='card'><h2>Administrator Panel</h2></div>", unsafe_allow_html=True)
