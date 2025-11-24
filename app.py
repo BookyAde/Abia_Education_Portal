@@ -68,7 +68,7 @@ with st.sidebar:
 
     selected = option_menu(
         menu_title=None,
-        options=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About Creator"],
+        options=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About"],
         icons=["house-fill", "graph-up-arrow", "cloud-upload-fill", "cloud-download-fill", "shield-lock-fill", "person-circle"],
         default_index=0,
         orientation="vertical",
