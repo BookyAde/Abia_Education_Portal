@@ -188,40 +188,42 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
     st.markdown("</div>", unsafe_allow_html=True)
 
 elif selected == "Live Dashboard":
-    st.markdown("<div class='card'><h1 style='text-align:center; color:#006400;'>Live Education Statistics • Abia State</h1>"
-                "<p style='text-align:center; font-size:18px;'>Real-time • Verified • All 17 LGAs • Updated Every Minute</p></div>", 
-                unsafe_allow_html=True)
+    st.markdown("""
+    <div class='card'>
+        <h1 style='text-align:center; color:#006400;'>Live Education Statistics • Abia State</h1>
+        <p style='text-align:center; font-size:18px; color:#333;'>Real-time • Verified • All 17 LGAs • Updated Every Minute</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Auto-refresh every 60 seconds
-    st_autorefresh(interval=60000, key="data_refresh")
+    st_autorefresh(interval=60000, key="dash_refresh")
 
-    # === LOAD DATA DIRECTLY (no function needed) ===
+    # === LOAD DATA SAFELY ===
     try:
         df = pd.read_sql("""
             SELECT 
                 l.lga_name,
                 COALESCE(SUM(s.enrollment_total), 0) AS students,
                 COALESCE(SUM(s.teachers_total), 0) AS teachers,
-                ROUND(COALESCE(SUM(s.enrollment_total)::NUMERIC / NULLIF(SUM(s.teachers_total), 0), 0), 1) AS pupil_teacher_ratio
+                ROUND(COALESCE(SUM(s.enrollment_total)::NUMERIC / NULLIF(SUM(s.teachers_total), 0), 0), 1) AS ratio
             FROM dwh.dim_lga l
             LEFT JOIN school_submissions s ON l.lga_name = s.lga_name AND s.approved = TRUE
             GROUP BY l.lga_key, l.lga_name
             ORDER BY students DESC
         """, engine)
 
-        # Force all 17 LGAs to appear (even with 0)
-        all_lgas = ['Aba North', 'Aba South', 'Arochukwu', 'Bende', 'Ikwuano', 'Isiala Ngwa North', 
-                    'Isiala Ngwa South', 'Isuikwuato', 'Obingwa', 'Ohafia', 'Osisioma', 'Ugwunagbo', 
-                    'Ukwa East', 'Ukwa West', 'Umunneochi', 'Umuahia North', 'Umuahia South']
+        # Force all 17 LGAs (even with zero data)
+        all_lgas = ['Aba North','Aba South','Arochukwu','Bende','Ikwuano','Isiala Ngwa North',
+                    'Isiala Ngwa South','Isuikwuato','Obingwa','Ohafia','Osisioma','Ugwunagbo',
+                    'Ukwa East','Ukwa West','Umunneochi','Umuahia North','Umuahia South']
         df = df.set_index('lga_name').reindex(all_lgas, fill_value=0).reset_index()
         df['lga_name'] = df['lga_name'].astype(str)
 
     except Exception as e:
-        st.error("Dashboard loading failed. Contact admin.")
+        st.error("Dashboard failed to load. Please contact admin.")
         st.code(str(e))
         st.stop()
 
-    # === TOTAL SUMMARY ===
+    # === LIVE SUMMARY METRICS ===
     total_students = int(df['students'].sum())
     total_teachers = int(df['teachers'].sum())
     total_schools = pd.read_sql("SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
@@ -230,30 +232,31 @@ elif selected == "Live Dashboard":
     with col1: st.metric("Total Students", f"{total_students:,}")
     with col2: st.metric("Total Teachers", f"{total_teachers:,}")
     with col3: st.metric("Verified Schools", f"{total_schools:,}")
-    with col4: st.metric("LGAs Covered", "17", delta="Complete")
+    with col4: st.metric("LGAs Active", "17", delta="Full Coverage")
 
     st.markdown("---")
 
-    # === TABS WITH PLOTLY MAGIC ===
+    # === TABS — PLOTLY BEAUTY (NO MATPLOTLIB NEEDED) ===
     import plotly.express as px
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Bar Charts", "Pie Charts", "Rankings", "Full Data"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Bar Charts", "Pie Charts", "Top Performers", "Full Table"])
 
     with tab1:
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("Students per LGA")
+            st.subheader("Students by LGA")
             fig = px.bar(df, x='lga_name', y='students', color='students',
-                         color_continuous_scale="Greens", height=600,
-                         title="Total Enrollment by LGA")
-            fig.update_layout(xaxis_title="", yaxis_title="Students")
+                         color_continuous_scale="Greens", height=550,
+                         title="Total Enrollment")
+            fig.update_layout(xaxis_title="", yaxis_title="Students", showlegend=False)
             st.plotly_chart(fig, use_container_width=True)
+
         with col2:
-            st.subheader("Teachers per LGA")
+            st.subheader("Teachers by LGA")
             fig = px.bar(df, x='lga_name', y='teachers', color='teachers',
-                         color_continuous_scale="Blues", height=600,
+                         color_continuous_scale="Blues", height=550,
                          title="Teacher Distribution")
-            fig.update_layout(xaxis_title="", yaxis_title="Teachers")
+            fig.update_layout(xaxis_title="", yaxis_title="Teachers", showlegend=False)
             st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
@@ -264,6 +267,7 @@ elif selected == "Live Dashboard":
                          color_discrete_sequence=px.colors.sequential.Greens)
             fig.update_traces(textposition='inside', textinfo='percent+label')
             st.plotly_chart(fig, use_container_width=True)
+
         with col2:
             st.subheader("Teacher Share")
             fig = px.pie(df, values='teachers', names='lga_name',
@@ -277,19 +281,19 @@ elif selected == "Live Dashboard":
         st.dataframe(top5.style.format({"students": "{:,}", "teachers": "{:,}"}), use_container_width=True)
 
         st.subheader("Best Pupil-Teacher Ratio")
-        best = df[df['teachers'] > 0].nsmallest(5, 'pupil_teacher_ratio')[['lga_name', 'pupil_teacher_ratio']]
+        best = df[df['teachers'] > 0].nsmallest(5, 'ratio')[['lga_name', 'ratio']]
         st.dataframe(best, use_container_width=True)
 
     with tab4:
-        st.subheader("Complete Interactive Table")
+        st.subheader("Complete Verified Data")
         st.dataframe(
-            df.style.format({"students": "{:,}", "teachers": "{:,}", "pupil_teacher_ratio": "{:.1f}"})
-            .background_gradient(subset=['students'], cmap='Greens')
-            .background_gradient(subset=['teachers'], cmap='Blues'),
+            df.style.format({"students": "{:,}", "teachers": "{:,}", "ratio": "{:.1f}"})
+            .bar(subset=['students'], color='#90EE90')
+            .bar(subset=['teachers'], color='#87CEFA'),
             use_container_width=True
         )
 
-    st.success("All 17 LGAs • 100% Live • Verified Data")
+    st.success("All 17 LGAs • 100% Verified • Real-Time • Government-Ready")
 
 elif selected == "Submit Data":
     st.markdown("### Submit Your School Data")
