@@ -118,6 +118,8 @@ def load_dashboard_data():
     return pd.read_sql(query, engine)
 
 
+
+
 # ===================== SAVE SCHOOL SUBMISSION - FIXED =====================
 def save_school_submission(school_name, lga_name, enrollment_total, teachers_total, submitted_by, email):
     query = text("""
@@ -183,6 +185,38 @@ elif selected == "Live Dashboard":
             st.subheader("Pupil-Teacher Ratio")
             st.bar_chart(df.set_index("lga_name")["pupil_teacher_ratio"])
         st.dataframe(df.style.format({"students": "{:,}", "teachers": "{:,}"}))
+
+elif selected == "Register/Login":
+    st.markdown("<div class='card'><h2>Login to Abia Education Portal</h2></div>", unsafe_allow_html=True)
+    
+    # Simple username + password login (you can change these)
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    
+    if st.button("Login"):
+        # Hardcoded credentials — change later if you want
+        if username == "admin" and password == "abia2025":
+            st.session_state.logged_in = True
+            st.session_state.user = username
+            st.success("Login successful! Welcome back.")
+            st.balloons()
+            st.rerun()
+        else:
+            st.error("Incorrect username or password")
+    
+    # Optional: Logout button (appears only when logged in)
+    if st.session_state.get("logged_in"):
+        if st.button("Logout"):
+            st.session_state.logged_in = False
+            st.session_state.user = None
+            st.rerun()
+    
+    # Show login status
+    if st.session_state.get("logged_in"):
+        st.info(f"Logged in as: **{st.session_state.user}**")
+    else:
+        st.info("You are not logged in")
+        
 
 elif selected == "Submit Data":
     st.markdown("<div class='card'><h2>Submit School Data</h2></div>", unsafe_allow_html=True)
