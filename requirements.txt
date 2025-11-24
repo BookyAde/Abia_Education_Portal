@@ -6,3 +6,4 @@ sqlalchemy
 pg8000
 pillow
 xlsxwriter
+passlib[bcrypt]
