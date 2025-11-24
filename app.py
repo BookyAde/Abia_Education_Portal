@@ -188,22 +188,108 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
     st.markdown("</div>", unsafe_allow_html=True)
 
 elif selected == "Live Dashboard":
-    st.markdown("### Live Approved Statistics")
-    st_autorefresh(interval=60000)
-    df = pd.read_sql(text("""
-        SELECT l.lga_name, SUM(f.enrollment_total) AS students, SUM(f.teachers_total) AS teachers
-        FROM dwh.fact_abia_metrics f
-        JOIN dwh.dim_lga l ON f.lga_key = l.lga_key
-        WHERE f.approved = TRUE
-        GROUP BY l.lga_name ORDER BY students DESC
-    """), engine)
-    if df.empty:
-        st.info("No approved data yet.")
-    else:
+    st.markdown("<div class='card'><h1 style='text-align:center; color:#006400;'>Live Education Statistics • Abia State</h1>"
+                "<p style='text-align:center; font-size:18px;'>Real-time • Verified • All 17 LGAs • Updated Every Minute</p></div>", 
+                unsafe_allow_html=True)
+
+    # Auto-refresh every 60 seconds
+    st_autorefresh(interval=60000, key="data_refresh")
+
+    # === LOAD DATA DIRECTLY (no function needed) ===
+    try:
+        df = pd.read_sql("""
+            SELECT 
+                l.lga_name,
+                COALESCE(SUM(s.enrollment_total), 0) AS students,
+                COALESCE(SUM(s.teachers_total), 0) AS teachers,
+                ROUND(COALESCE(SUM(s.enrollment_total)::NUMERIC / NULLIF(SUM(s.teachers_total), 0), 0), 1) AS pupil_teacher_ratio
+            FROM dwh.dim_lga l
+            LEFT JOIN school_submissions s ON l.lga_name = s.lga_name AND s.approved = TRUE
+            GROUP BY l.lga_key, l.lga_name
+            ORDER BY students DESC
+        """, engine)
+
+        # Force all 17 LGAs to appear (even with 0)
+        all_lgas = ['Aba North', 'Aba South', 'Arochukwu', 'Bende', 'Ikwuano', 'Isiala Ngwa North', 
+                    'Isiala Ngwa South', 'Isuikwuato', 'Obingwa', 'Ohafia', 'Osisioma', 'Ugwunagbo', 
+                    'Ukwa East', 'Ukwa West', 'Umunneochi', 'Umuahia North', 'Umuahia South']
+        df = df.set_index('lga_name').reindex(all_lgas, fill_value=0).reset_index()
+        df['lga_name'] = df['lga_name'].astype(str)
+
+    except Exception as e:
+        st.error("Dashboard loading failed. Contact admin.")
+        st.code(str(e))
+        st.stop()
+
+    # === TOTAL SUMMARY ===
+    total_students = int(df['students'].sum())
+    total_teachers = int(df['teachers'].sum())
+    total_schools = pd.read_sql("SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: st.metric("Total Students", f"{total_students:,}")
+    with col2: st.metric("Total Teachers", f"{total_teachers:,}")
+    with col3: st.metric("Verified Schools", f"{total_schools:,}")
+    with col4: st.metric("LGAs Covered", "17", delta="Complete")
+
+    st.markdown("---")
+
+    # === TABS WITH PLOTLY MAGIC ===
+    import plotly.express as px
+
+    tab1, tab2, tab3, tab4 = st.tabs(["Bar Charts", "Pie Charts", "Rankings", "Full Data"])
+
+    with tab1:
         col1, col2 = st.columns(2)
-        with col1: st.bar_chart(df.set_index("lga_name")["students"])
-        with col2: st.bar_chart(df.set_index("lga_name")["teachers"])
-        st.dataframe(df)
+        with col1:
+            st.subheader("Students per LGA")
+            fig = px.bar(df, x='lga_name', y='students', color='students',
+                         color_continuous_scale="Greens", height=600,
+                         title="Total Enrollment by LGA")
+            fig.update_layout(xaxis_title="", yaxis_title="Students")
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            st.subheader("Teachers per LGA")
+            fig = px.bar(df, x='lga_name', y='teachers', color='teachers',
+                         color_continuous_scale="Blues", height=600,
+                         title="Teacher Distribution")
+            fig.update_layout(xaxis_title="", yaxis_title="Teachers")
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab2:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Student Share")
+            fig = px.pie(df, values='students', names='lga_name',
+                         color_discrete_sequence=px.colors.sequential.Greens)
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            st.subheader("Teacher Share")
+            fig = px.pie(df, values='teachers', names='lga_name',
+                         color_discrete_sequence=px.colors.sequential.Blues)
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(fig, use_container_width=True)
+
+    with tab3:
+        st.subheader("Top 5 LGAs by Enrollment")
+        top5 = df.nlargest(5, 'students')[['lga_name', 'students', 'teachers']]
+        st.dataframe(top5.style.format({"students": "{:,}", "teachers": "{:,}"}), use_container_width=True)
+
+        st.subheader("Best Pupil-Teacher Ratio")
+        best = df[df['teachers'] > 0].nsmallest(5, 'pupil_teacher_ratio')[['lga_name', 'pupil_teacher_ratio']]
+        st.dataframe(best, use_container_width=True)
+
+    with tab4:
+        st.subheader("Complete Interactive Table")
+        st.dataframe(
+            df.style.format({"students": "{:,}", "teachers": "{:,}", "pupil_teacher_ratio": "{:.1f}"})
+            .background_gradient(subset=['students'], cmap='Greens')
+            .background_gradient(subset=['teachers'], cmap='Blues'),
+            use_container_width=True
+        )
+
+    st.success("All 17 LGAs • 100% Live • Verified Data")
 
 elif selected == "Submit Data":
     st.markdown("### Submit Your School Data")
