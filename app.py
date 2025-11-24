@@ -143,7 +143,7 @@ elif selected == "Register/Login":
     
     with st.form("login_form"):
         st.write("**Default Admin Account**")
-        st.write("Username: `admin` • Password: `Booky123`")
+        st.write("Username: ` ` • Password: ` `")
         username = st.text_input("Username", value="admin")
         password = st.text_input("Password", type="password", value="Booky123")
         login = st.form_submit_button("Login as Administrator")
