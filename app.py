@@ -448,31 +448,3 @@ elif selected == "About":
     """, unsafe_allow_html=True)
 
     st.balloons()
-
-    # ===================== FOOTER =====================
-st.markdown("""
-<div style="margin-top:100px; padding:50px 20px; background:#006400; color:white; text-align:center; border-radius:25px 25px 0 0; box-shadow:0 -15px 40px rgba(0,0,0,0.4);">
-    <h2 style="margin:0; font-size:36px; color:#32CD32;">Abia State Education Portal</h2>
-    <p style="font-size:20px; margin:15px 0; opacity:0.9;">
-        Official Real-Time Data Initiative • Ministry of Education, Abia State
-    </p>
-
-    <div style="margin:35px 0; padding:25px; background:rgba(255,255,255,0.15); border-radius:18px; display:inline-block; min-width:400px;">
-        <p style="margin:0; font-size:20px; font-weight:bold; color:#e8f5e8;">
-            Built with Excellence by Alabi Winner (BookyAde)
-        </p>
-        <p style="margin:10px 0 0; font-size:17px; color:#e8f5e8;">
-            Abia TechRice Cohort 2.0 • Class of 2025
-        </p>
-    </div>
-
-    <div style="margin-top:40px; font-size:17px; opacity:0.9;">
-        <p style="margin:8px 0;">
-            © 2025 Abia State Government • All Rights Reserved
-        </p>
-        <p style="margin:8px 0;">
-            Powered by <strong>Abia TechRice</strong> • Made with 🇳🇬 in Abia State
-        </p>
-    </div>
-</div>
-""", unsafe_allow_html=True)
