@@ -92,13 +92,74 @@ st.image(logo, width=130)
 st.markdown("<h1 style='text-align:center; color:#006400;'>Abia State Education Data Portal</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align:center;'>Official • Verified • Real-Time</p>", unsafe_allow_html=True)
 
+# ===================== ULTRA BEAUTIFUL & ANIMATED SIDEBAR =====================
 with st.sidebar:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/5/5f/Seal_of_Abia_State.svg", width=160)
+    # Logo at the top
+    st.image("https://upload.wikimedia.org/wikipedia/commons/5/5f/Seal_of_Abia_State.svg", width=180)
+    st.markdown("<h2 style='text-align:center; color:#006400; margin-top:-10px;'>Abia Education Portal</h2>", unsafe_allow_html=True)
+    
+    # Custom CSS for the sidebar (smooth hover, modern look)
+    st.markdown("""
+    <style>
+        /* Smooth transition when opening/closing */
+        .css-1d391kg {transition: all 0.4s ease;}
+        
+        /* Beautiful menu items */
+        .css-1v0mbdj a {
+            border-radius: 15px !important;
+            margin: 8px 10px !important;
+            padding: 15px 12px !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+            border-left: 5px solid transparent;
+        }
+        
+        /* Hover effect */
+        .css-1v0mbdj a:hover {
+            background-color: rgba(50, 205, 50, 0.2) !important;
+            border-left: 5px solid #32CD32 !important;
+            transform: translateX(8px);
+        }
+        
+        /* Active selected item */
+        .css-1v0mbdj a[data-baseweb="menu-item"][aria-current="page"],
+        .css-1v0mbdj a[data-baseweb="menu-item"]:focus {
+            background: linear-gradient(90deg, #006400, #228B22) !important;
+            color: white !important;
+            border-left: 5px solid #32CD32 !important;
+            box-shadow: 0 4px 15px rgba(0,100,0,0.3);
+        }
+        
+        /* Icon styling */
+        .css-1v0mbdj i {
+            font-size: 22px !important;
+            margin-right: 12px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # The actual menu — now looks AMAZING
     selected = option_menu(
-        "Navigation",
-        ["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About"],
-        icons=["house", "bar-chart-fill", "upload", "download", "lock-fill", "info-circle"],
-        default_index=0
+        menu_title=None,
+        options=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About"],
+        icons=["house-fill", "graph-up-arrow", "cloud-upload-fill", "cloud-download-fill", "shield-lock-fill", "person-circle"],
+        default_index=0,
+        orientation="vertical",
+        styles={
+            "container": {"padding": "0px", "background-color": "#f8fff8"},
+            "nav-link": {
+                "font-size": "18px",
+                "text-align": "left",
+                "margin": "5px",
+                "padding": "14px",
+                "border-radius": "15px",
+            },
+            "nav-link-selected": {
+                "background": "linear-gradient(90deg, #006400, #228B22)",
+                "color": "white",
+                "font-weight": "bold"
+            },
+        }
     )
 
 # ===================== PAGES =====================
