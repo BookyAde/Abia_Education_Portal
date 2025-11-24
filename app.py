@@ -99,9 +99,93 @@ with st.sidebar:
     )
 
 # ===================== PAGES =====================
-if selected == "Home":
-    st.success("Welcome to the Official Abia State Education Data Portal")
-    st.info("Only verified school submissions appear on the public dashboard.")
+if selected == "Home" or selected is None:  # ← Critical fix: shows on first load!
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+
+    # HERO BANNER — Presidential feel
+    st.markdown("""
+    <div style="background:linear-gradient(135deg, #006400, #32CD32); padding:60px 20px; border-radius:25px; text-align:center; color:white; box-shadow:0 15px 40px rgba(0,100,0,0.4); margin-bottom:40px;">
+        <h1 style="font-size:56px; margin:0; font-weight:900;">Abia State Education Portal</h1>
+        <p style="font-size:28px; margin:20px 0 0; opacity:0.95;">Real-Time • Verified • Transparent</p>
+        <p style="font-size:20px; margin-top:10px;">1,900+ Schools • 17 LGAs • Live Data • Built for Excellence</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # LIVE STATS — Auto-updating from your real data
+    try:
+        total_schools = pd.read_sql("SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
+        total_students = pd.read_sql("SELECT COALESCE(SUM(enrollment_total),0) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
+        total_teachers = pd.read_sql("SELECT COALESCE(SUM(teachers_total),0) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
+        total_lgas = pd.read_sql("SELECT COUNT(DISTINCT lga_name) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
+    except:
+        total_schools = total_students = total_teachers = total_lgas = "Loading..."
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Verified Schools", f"{total_schools:,}", delta="Live & Growing")
+    with col2:
+        st.metric("Total Students", f"{total_students:,}")
+    with col3:
+        st.metric("Total Teachers", f"{total_teachers:,}")
+    with col4:
+        st.metric("LGAs Covered", total_lgas, delta="100% Coverage")
+
+    # MISSION & VISION — Powerful & inspiring
+    st.markdown("""
+    <div style="background:#f8fff8; padding:40px; border-radius:20px; border-left:8px solid #006400; margin:40px 0;">
+        <h2 style="color:#006400; text-align:center;">Our Vision</h2>
+        <p style="font-size:19px; text-align:center; color:#333; line-height:1.8;">
+            A future where <strong>every child in Abia State</strong> is counted, every school is seen, and every decision is driven by <strong>real, transparent, and up-to-date data</strong>.
+        </p>
+        <p style="text-align:center; font-style:italic; color:#006400; margin-top:20px;">
+            “No child left behind. No school left out.”
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # WHAT VISITORS CAN DO — Clear guidance
+    st.markdown("### Navigate the Portal")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.info("""
+        **Live Dashboard**  
+        Explore real-time statistics: enrollment, teacher distribution, and pupil-teacher ratios across all 17 LGAs.
+        """)
+    with col2:
+        st.success("""
+        **Submit Data**  
+        School administrators can submit verified school records for inclusion on the portal.
+        """)
+    with col3:
+        st.warning("""
+        **Request Dataset**  
+        Download the complete verified education dataset for research, planning, or reporting.
+        """)
+
+    # FINAL CALL TO ACTION — Emotional & patriotic
+    st.markdown("""
+    <div style="text-align:center; padding:50px 20px; background:#e8f5e8; border-radius:20px; margin:50px 0;">
+        <h2 style="color:#006400;">This is more than a dashboard.</h2>
+        <p style="font-size:22px; max-width:800px; margin:20px auto; color:#333;">
+            This is <strong>Abia State taking ownership</strong> of its education future — one verified school at a time.
+        </p>
+        <p style="font-size:18px; color:#006400; font-weight:bold;">
+            Together, we are building the most transparent education system in Nigeria.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Creator Credit — Proud & visible
+    st.markdown("""
+    <div style="text-align:center; margin-top:50px; color:#006400; font-size:18px;">
+        <p><strong>Built with passion & excellence by</strong></p>
+        <h3>Alabi Winner (BookyAde)</h3>
+        <p>Abia TechRice Cohort 2.0 • Class of 2025</p>
+        <p><a href="https://github.com/BookyAde" style="color:#006400;">github.com/BookyAde</a></p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 elif selected == "Live Dashboard":
     st.markdown("### Live Approved Statistics")
