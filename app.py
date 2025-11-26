@@ -1,6 +1,6 @@
 # ===================== ABIA STATE EDUCATION PORTAL - FINAL PERFECTION =====================
 # Built by Alabi Winner (BookyAde) • Abia TechRice Cohort 2.0 • 2025
-# Username: admin | Password: Booky123
+# Username: admin | Password: 
 
 import streamlit as st
 from PIL import Image
@@ -31,11 +31,48 @@ st.markdown("""
     div[data-testid="stHorizontalBlock"] {gap: 2rem;}
 </style>
 """, unsafe_allow_html=True)
+
 # ===================== DATABASE CONNECTION =====================
-engine = create_engine(
-    f"postgresql+pg8000://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@"
-    f"{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
-)
+def get_db_connection():
+    try:
+        # Check if secrets are loaded
+        if not st.secrets:
+            st.error("❌ Secrets not found! Please create .streamlit/secrets.toml")
+            st.stop()
+            
+        # Construct URL from secrets
+        db_url = (
+            f"postgresql+pg8000://{st.secrets['DB_USER']}:{st.secrets['DB_PASSWORD']}@"
+            f"{st.secrets['DB_HOST']}:{st.secrets['DB_PORT']}/{st.secrets['DB_NAME']}"
+        )
+        return create_engine(db_url)
+    except Exception as e:
+        st.error(f"❌ Database Connection Error: {e}")
+        return None
+
+engine = get_db_connection()
+
+# ===================== EMAIL FUNCTION =====================
+def send_email(to_email, subject, body):
+    try:
+        email_user = st.secrets["EMAIL_USER"]
+        email_pass = st.secrets["EMAIL_PASSWORD"]
+        
+        msg = MIMEMultipart()
+        msg['From'] = email_user
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Connect to Gmail SMTP
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.login(email_user, email_pass)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        st.error(f"❌ Email Error: {e}")
+        return False
 
 # ===================== STUNNING ANIMATED SIDEBAR =====================
 with st.sidebar:
@@ -82,6 +119,7 @@ with st.sidebar:
 # ===================== DATA FUNCTIONS =====================
 @st.cache_data(ttl=60)
 def get_live_data():
+    if not engine: return pd.DataFrame()
     return pd.read_sql("""
         SELECT l.lga_name,
                COALESCE(SUM(s.enrollment_total),0) AS students,
@@ -94,6 +132,7 @@ def get_live_data():
     """, engine)
 
 def save_submission(school, lga, students, teachers, name, email):
+    if not engine: return False
     try:
         with engine.begin() as conn:
             conn.execute(text("""
@@ -123,10 +162,13 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
 
     # LIVE STATS — Auto-updating from your real data
     try:
-        total_schools = pd.read_sql("SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
-        total_students = pd.read_sql("SELECT COALESCE(SUM(enrollment_total),0) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
-        total_teachers = pd.read_sql("SELECT COALESCE(SUM(teachers_total),0) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
-        total_lgas = pd.read_sql("SELECT COUNT(DISTINCT lga_name) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
+        if engine:
+            total_schools = pd.read_sql("SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
+            total_students = pd.read_sql("SELECT COALESCE(SUM(enrollment_total),0) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
+            total_teachers = pd.read_sql("SELECT COALESCE(SUM(teachers_total),0) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
+            total_lgas = pd.read_sql("SELECT COUNT(DISTINCT lga_name) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
+        else:
+            raise Exception("No DB")
     except:
         total_schools = total_students = total_teachers = total_lgas = "Loading..."
 
@@ -202,35 +244,45 @@ elif selected == "Live Dashboard":
     st_autorefresh(interval=60000, key="live")
     df = get_live_data()
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1: st.metric("Total Students", f"{int(df['students'].sum()):,}")
-    with col2: st.metric("Total Teachers", f"{int(df['teachers'].sum()):,}")
-    with col3: st.metric("Verified Schools", f"{pd.read_sql('SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE', engine).iloc[0,0]:,}")
-    with col4: st.metric("LGAs", "17", "Complete")
+    if not df.empty:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1: st.metric("Total Students", f"{int(df['students'].sum()):,}")
+        with col2: st.metric("Total Teachers", f"{int(df['teachers'].sum()):,}")
+        with col3: st.metric("Verified Schools", f"{pd.read_sql('SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE', engine).iloc[0,0]:,}")
+        with col4: st.metric("LGAs", "17", "Complete")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.bar(df, x='lga_name', y='students', color='students', color_continuous_scale="Greens", title="Students by LGA")
-        st.plotly_chart(fig, use_container_width=True)
-    with col2:
-        fig = px.bar(df, x='lga_name', y='teachers', color='teachers', color_continuous_scale="Blues", title="Teachers by LGA")
-        st.plotly_chart(fig, use_container_width=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            fig = px.bar(df, x='lga_name', y='students', color='students', color_continuous_scale="Greens", title="Students by LGA")
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            fig = px.bar(df, x='lga_name', y='teachers', color='teachers', color_continuous_scale="Blues", title="Teachers by LGA")
+            st.plotly_chart(fig, use_container_width=True)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.pie(df, values='students', names='lga_name', title="Student Share")
-        st.plotly_chart(fig, use_container_width=True)
-    with col2:
-        fig = px.pie(df, values='teachers', names='lga_name', title="Teacher Share")
-        st.plotly_chart(fig, use_container_width=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            fig = px.pie(df, values='students', names='lga_name', title="Student Share")
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            fig = px.pie(df, values='teachers', names='lga_name', title="Teacher Share")
+            st.plotly_chart(fig, use_container_width=True)
 
-    st.success("ALL 17 LGAs • 100% VERIFIED • LIVE DATA")
+        st.success("ALL 17 LGAs • 100% VERIFIED • LIVE DATA")
+    else:
+        st.warning("No data available yet or database connection failed.")
 
 elif selected == "Submit Data":
     st.markdown("### Submit School Data")
     st.info("Your school email is required for verification")
 
-    lgas = pd.read_sql("SELECT lga_name FROM dwh.dim_lga ORDER BY lga_name", engine)['lga_name'].tolist()
+    if engine:
+        try:
+            lgas = pd.read_sql("SELECT lga_name FROM dwh.dim_lga ORDER BY lga_name", engine)['lga_name'].tolist()
+        except:
+            lgas = []
+            st.error("Could not load LGAs. Please check database setup.")
+    else:
+        lgas = []
 
     if not st.session_state.get("awaiting_code"):
         with st.form("send_code"):
@@ -247,10 +299,18 @@ elif selected == "Submit Data":
                 else:
                     st.session_state.temp = {"school": school, "lga": lga, "students": students, "teachers": teachers, "name": name, "email": email}
                     code = random.randint(100000, 999999)
-                    st.session_state.code = code
-                    st.session_state.awaiting_code = True
-                    st.success(f"Code sent to {email}")
-                    st.rerun()
+                    
+                    # Send Email
+                    subject = "Your Abia Education Portal Verification Code"
+                    body = f"Hello {name},\n\nYour verification code for {school} is: {code}\n\nPlease enter this code on the portal to complete your submission.\n\nThank you,\nAbia Education Portal Team"
+                    
+                    if send_email(email, subject, body):
+                        st.session_state.code = code
+                        st.session_state.awaiting_code = True
+                        st.success(f"✅ Code sent to {email}")
+                        st.rerun()
+                    else:
+                        st.error("Failed to send email. Please check the address or try again later.")
     else:
         st.info(f"Code sent to **{st.session_state.temp['email']}**")
         with st.form("verify"):
@@ -258,6 +318,12 @@ elif selected == "Submit Data":
             if st.form_submit_button("Verify & Submit"):
                 if str(st.session_state.code) == entered:
                     if save_submission(**st.session_state.temp):
+                        # Send Success Email
+                        send_email(
+                            st.session_state.temp['email'], 
+                            "Submission Received - Abia Education Portal",
+                            f"Hello {st.session_state.temp['name']},\n\nYour data for {st.session_state.temp['school']} has been received and is pending approval.\n\nYou will be notified once an admin reviews it.\n\nRegards,\nAbia Education Portal"
+                        )
                         st.success("Submitted successfully!")
                         st.balloons()
                         for k in ["temp", "code", "awaiting_code"]:
@@ -276,13 +342,16 @@ elif selected == "Request Data":
 
     # Load full approved data
     try:
-        df = pd.read_sql("""
-            SELECT id, school_name, lga_name, enrollment_total, teachers_total, 
-                   submitted_by, email, submitted_at,
-                   CASE WHEN approved=TRUE THEN 'Approved' WHEN approved=FALSE THEN 'Rejected' ELSE 'Pending' END AS status
-            FROM school_submissions 
-            ORDER BY submitted_at DESC
-        """, engine)
+        if engine:
+            df = pd.read_sql("""
+                SELECT id, school_name, lga_name, enrollment_total, teachers_total, 
+                       submitted_by, email, submitted_at,
+                       CASE WHEN approved=TRUE THEN 'Approved' WHEN approved=FALSE THEN 'Rejected' ELSE 'Pending' END AS status
+                FROM school_submissions 
+                ORDER BY submitted_at DESC
+            """, engine)
+        else:
+            df = pd.DataFrame()
     except Exception as e:
         st.error("Failed to load data")
         st.stop()
@@ -364,7 +433,11 @@ elif selected == "Admin Panel":
     if not st.session_state.get("admin"):
         st.stop()
     st.success("ADMIN PANEL • Full Control")
-    pending = pd.read_sql("SELECT * FROM school_submissions WHERE approved IS NULL ORDER BY submitted_at DESC", engine)
+    if engine:
+        pending = pd.read_sql("SELECT * FROM school_submissions WHERE approved IS NULL ORDER BY submitted_at DESC", engine)
+    else:
+        pending = pd.DataFrame()
+        
     if pending.empty:
         st.success("No pending submissions")
     else:
@@ -380,12 +453,26 @@ elif selected == "Admin Panel":
                                              "SELECT l.lga_key, :e, :t, TRUE FROM dwh.dim_lga l WHERE l.lga_name=:lga "
                                              "ON CONFLICT (lga_key) DO UPDATE SET enrollment_total=EXCLUDED.enrollment_total, teachers_total=EXCLUDED.teachers_total"),
                                         {"e": row['enrollment_total'], "t": row['teachers_total'], "lga": row['lga_name']})
+                        
+                        # Send Approval Email
+                        send_email(
+                            row['email'],
+                            "Submission Approved - Abia Education Portal",
+                            f"Good news!\n\nYour data submission for {row['school_name']} has been APPROVED and is now live on the dashboard.\n\nThank you for your contribution.\n\nRegards,\nAbia Education Portal"
+                        )
                         st.success("Approved & Live!")
                         st.rerun()
                 with c2:
                     if st.button("REJECT", key=f"r{row['id']}"):
                         with engine.begin() as conn:
                             conn.execute(text("UPDATE school_submissions SET approved=FALSE WHERE id=:id"), {"id": row['id']})
+                        
+                        # Send Rejection Email
+                        send_email(
+                            row['email'],
+                            "Submission Update - Abia Education Portal",
+                            f"Hello,\n\nYour submission for {row['school_name']} was reviewed but could not be approved at this time.\n\nPlease ensure all data is accurate and try again.\n\nRegards,\nAbia Education Portal"
+                        )
                         st.warning("Rejected")
                         st.rerun()
 
