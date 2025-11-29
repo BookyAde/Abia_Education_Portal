@@ -86,115 +86,104 @@ def send_email(to_email, subject, body):
         st.error(f"❌ Email Error: {e}")
         return False
 
-# ===================== TOP HORIZONTAL NAVIGATION BAR — FINAL & OFFICIAL =====================
-# DELETE the entire "with st.sidebar:" block and paste this instead
-
-import streamlit as st
-from streamlit_option_menu import option_menu
-
-# HIDE DEFAULT SIDEBAR COMPLETELY
-st.markdown("""
-<style>
-    section[data-testid="stSidebar"] {display: none !important;}
-    .block-container {padding-top: 1rem !important;}
-</style>
-""", unsafe_allow_html=True)
-
-# TOP BAR WITH LOGO + MENU
-st.markdown(f"""
-<div class="header-container">
-    <div class="header-content">
-        <div class="logo-title">
-            <img src="assets/Abia_logo.jpeg" alt="Abia Logo" width="80">
-            <div>
-                <h1 style="margin:0; color:white; font-size:28px;">Abia Education Portal</h1>
-                <p style="margin:0; color:#e0ffe0; font-size:14px;">Real-Time • Verified • Transparent</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<style>
-    .header-container {{
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        background: linear-gradient(90deg, #006400, #228B22);
-        z-index: 9999;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.4);
-        border-bottom: 6px solid #32CD32;
-    }}
-    .header-content {{
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 15px 25px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }}
-    .logo-title {{
-        display: flex;
-        align-items: center;
-        gap: 18px;
-    }}
-    .logo-title img {{
-        border-radius: 50%;
-        border: 5px solid white;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.6);
-    }}
-    .main-content {{
-        margin-top: 130px;
-        padding: 20px;
-    }}
-</style>
-""", unsafe_allow_html=True)
-
-# MENU OPTIONS
-if st.session_state.get("admin", False):
-    options = ["Home", "Live Dashboard", "Submit Data", "Request Data", "School Lookup", "Transparency Ranking", "Admin Panel", "Logout"]
-    icons = ["house-fill", "graph-up-arrow", "cloud-upload-fill", "cloud-download-fill", "search-heart-fill", "trophy-fill", "shield-lock-fill", "box-arrow-right"]
-else:
-    options = ["Home", "Live Dashboard", "Submit Data", "Request Data", "School Lookup", "Transparency Ranking", "Admin Login", "About"]
-    icons = ["house-fill", "graph-up-arrow", "cloud-upload-fill", "cloud-download-fill", "search-heart-fill", "trophy-fill", "shield-lock-fill", "person-circle"]
-
-# HORIZONTAL MENU (Beautiful & Responsive)
-selected = option_menu(
-    menu_title=None,
-    options=options,
-    icons=icons,
-    orientation="horizontal",
-    default_index=0,
-    styles={
-        "container": {"padding": "0px", "background-color": "transparent"},
-        "nav-link": {
-            "font-size": "17px",
-            "font-weight": "600",
-            "color": "white",
-            "padding": "12px 24px",
-            "margin": "0px 8px",
-            "border-radius": "16px",
-            "transition": "all 0.3s ease"
-        },
-        "nav-link:hover": {
-            "background-color": "rgba(255,255,255,0.2)",
-            "color": "white"
-        },
-        "nav-link-selected": {
-            "background-color": "#32CD32 !important",
-            "color": "black !important",
-            "font-weight": "bold"
+## ===================== STUNNING ANIMATED SIDEBAR — FINAL & COMPLETE =====================
+with st.sidebar:
+    st.image("assets/Abia_logo.jpeg", width=180)   # ← your own logo
+    st.markdown("<h2 style='text-align:center; color:#006400;'>Navigation</h2>", unsafe_allow_html=True)
+        
+    st.markdown("""
+    <style>
+        .css-1v0mbdj a {
+            border-radius: 15px !important;
+            margin: 10px 12px !important;
+            padding: 16px !important;
+            font-weight: 600 !important;
+            transition: all 0.4s ease !important;
+            border-left: 6px solid transparent;
         }
-    }
-)
+        .css-1v0mbdj a:hover {
+            background-color: rgba(50,205,50,0.25) !important;
+            border-left: 6px solid #32CD32 !important;
+            transform: translateX(10px);
+        }
+        .css-1v0mbdj a[data-baseweb="menu-item"][aria-current="page"] {
+            background: linear-gradient(90deg, #006400, #228B22) !important;
+            color: white !important;
+            border-left: 6px solid #32CD32 !important;
+            box-shadow: 0 6px 20px rgba(0,100,0,0.4);
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
-# LOGOUT HANDLER
-if st.session_state.get("admin", False) and selected == "Logout":
-    st.session_state.admin = False
-    st.rerun()
+    # ===================== ADMIN MENU =====================
+    if st.session_state.get("admin", False):
+        selected = option_menu(
+            menu_title=None,
+            options=[
+                "Home",
+                "Live Dashboard",
+                "Submit Data",
+                "Request Data",
+                "School Lookup",           # ← NEW: Search any school + report
+                "Transparency Ranking",    # ← Public leaderboard
+                "Admin Panel",
+                "Logout"
+            ],
+            icons=[
+                "house-fill",
+                "graph-up-arrow",
+                "cloud-upload-fill",
+                "cloud-download-fill",
+                "search-heart-fill",       # ← Perfect icon for lookup + care
+                "trophy-fill",
+                "shield-lock-fill",
+                "box-arrow-right"
+            ],
+            default_index=6,  # Opens on Admin Panel by default
+            orientation="vertical",
+            styles={
+                "container": {"padding": "0px", "background-color": "#f8fff8"},
+                "nav-link": {"font-size": "18px", "margin": "8px", "padding": "16px", "border-radius": "15px"},
+                "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
+            }
+        )
+        
+        if selected == "Logout":
+            st.session_state.admin = False
+            st.rerun()
 
-# PUSH ALL PAGE CONTENT BELOW THE BAR
-st.markdown('<div class="main-content">', unsafe_allow_html=True)
+    # ===================== PUBLIC / NORMAL USER MENU =====================
+    else:
+        selected = option_menu(
+            menu_title=None,
+            options=[
+                "Home",
+                "Live Dashboard",
+                "Submit Data",
+                "Request Data",
+                "School Lookup",           # ← NEW: Most important public feature
+                "Transparency Ranking",    # ← Public shaming/praise
+                "Admin Login",
+                "About"
+            ],
+            icons=[
+                "house-fill",
+                "graph-up-arrow",
+                "cloud-upload-fill",
+                "cloud-download-fill",
+                "search-heart-fill",       # ← Warm, caring icon
+                "trophy-fill",
+                "shield-lock-fill",
+                "person-circle"
+            ],
+            default_index=0,
+            orientation="vertical",
+            styles={
+                "container": {"padding": "0px", "background-color": "#f8fff8"},
+                "nav-link": {"font-size": "18px", "margin": "8px", "padding": "16px", "border-radius": "15px"},
+                "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
+            }
+        )
 # ===================== DATA FUNCTIONS =====================
 @st.cache_data(ttl=60)
 def get_live_data():
