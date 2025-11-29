@@ -417,65 +417,124 @@ elif selected == "Request Data":
             st.success("Your custom dataset is ready!")
             st.balloons()
 
+# ---------- SESSION STATE SETUP ----------
+if "admin" not in st.session_state:
+    st.session_state.admin = False
+
+if "selected" not in st.session_state:
+    st.session_state.selected = "Home"
+
+
+# ---------- ADMIN LOGIN ----------
 elif selected == "Admin Login":
     st.markdown("### Admin Access")
+
     with st.form("login"):
         user = st.text_input("Username")
         pwd = st.text_input("Password", type="password")
+
         if st.form_submit_button("Login"):
             if user == "admin" and pwd == "Booky123":
+                # Save admin login
                 st.session_state.admin = True
+                
+                # Move user to Admin Panel immediately
+                st.session_state.selected = "Admin Panel"
+
                 st.success("Welcome, Administrator!")
                 st.balloons()
+                st.rerun()  # <----- THIS IS THE MOST IMPORTANT PART
             else:
                 st.error("Access denied")
 
+
+# ---------- ADMIN PANEL ----------
 elif selected == "Admin Panel":
-    if not st.session_state.get("admin"):
+
+    # Prevent showing the panel without login
+    if not st.session_state.admin:
+        st.error("Unauthorized access. Please log in.")
         st.stop()
+
     st.success("ADMIN PANEL • Full Control")
+
     if engine:
-        pending = pd.read_sql("SELECT * FROM school_submissions WHERE approved IS NULL ORDER BY submitted_at DESC", engine)
+        pending = pd.read_sql(
+            "SELECT * FROM school_submissions WHERE approved IS NULL ORDER BY submitted_at DESC",
+            engine
+        )
     else:
         pending = pd.DataFrame()
-        
+
     if pending.empty:
         st.success("No pending submissions")
     else:
         for _, row in pending.iterrows():
+
             with st.expander(f"{row['school_name']} • {row['lga_name']}"):
-                st.write(f"Students: {row['enrollment_total']:,} | Teachers: {row['teachers_total']:,}")
+                st.write(
+                    f"Students: {row['enrollment_total']:,} | "
+                    f"Teachers: {row['teachers_total']:,}"
+                )
+
                 c1, c2 = st.columns(2)
+
+                # ---------- APPROVE BUTTON ----------
                 with c1:
                     if st.button("APPROVE", key=f"a{row['id']}"):
                         with engine.begin() as conn:
-                            conn.execute(text("UPDATE school_submissions SET approved=TRUE WHERE id=:id"), {"id": row['id']})
-                            conn.execute(text("INSERT INTO dwh.fact_abia_metrics (lga_key, enrollment_total, teachers_total, approved) "
-                                             "SELECT l.lga_key, :e, :t, TRUE FROM dwh.dim_lga l WHERE l.lga_name=:lga "
-                                             "ON CONFLICT (lga_key) DO UPDATE SET enrollment_total=EXCLUDED.enrollment_total, teachers_total=EXCLUDED.teachers_total"),
-                                        {"e": row['enrollment_total'], "t": row['teachers_total'], "lga": row['lga_name']})
-                        
-                        # Send Approval Email
+
+                            conn.execute(
+                                text("UPDATE school_submissions SET approved=TRUE WHERE id=:id"),
+                                {"id": row['id']}
+                            )
+
+                            conn.execute(
+                                text("""
+                                    INSERT INTO dwh.fact_abia_metrics 
+                                    (lga_key, enrollment_total, teachers_total, approved)
+                                    SELECT l.lga_key, :e, :t, TRUE 
+                                    FROM dwh.dim_lga l WHERE l.lga_name=:lga
+                                    ON CONFLICT (lga_key)
+                                    DO UPDATE SET 
+                                        enrollment_total = EXCLUDED.enrollment_total,
+                                        teachers_total = EXCLUDED.teachers_total
+                                """),
+                                {"e": row['enrollment_total'], "t": row['teachers_total'], "lga": row['lga_name']}
+                            )
+
                         send_email(
                             row['email'],
                             "Submission Approved - Abia Education Portal",
-                            f"Good news!\n\nYour data submission for {row['school_name']} has been APPROVED and is now live on the dashboard.\n\nThank you for your contribution.\n\nRegards,\nAbia Education Portal"
+                            f"Good news!\n\nYour data submission for {row['school_name']} "
+                            "has been APPROVED and is now live on the dashboard.\n\n"
+                            "Thank you for your contribution.\n\nRegards,\nAbia Education Portal"
                         )
+
                         st.success("Approved & Live!")
                         st.rerun()
+
+
+                # ---------- REJECT BUTTON ----------
                 with c2:
                     if st.button("REJECT", key=f"r{row['id']}"):
                         with engine.begin() as conn:
-                            conn.execute(text("UPDATE school_submissions SET approved=FALSE WHERE id=:id"), {"id": row['id']})
-                        
-                        # Send Rejection Email
+                            conn.execute(
+                                text("UPDATE school_submissions SET approved=FALSE WHERE id=:id"),
+                                {"id": row['id']}
+                            )
+
                         send_email(
                             row['email'],
                             "Submission Update - Abia Education Portal",
-                            f"Hello,\n\nYour submission for {row['school_name']} was reviewed but could not be approved at this time.\n\nPlease ensure all data is accurate and try again.\n\nRegards,\nAbia Education Portal"
+                            f"Hello,\n\nYour submission for {row['school_name']} "
+                            "was reviewed but could not be approved at this time.\n\n"
+                            "Please ensure all data is accurate and try again.\n\nRegards,\nAbia Education Portal"
                         )
+
                         st.warning("Rejected")
                         st.rerun()
+
 
 
 elif selected == "About":
