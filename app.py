@@ -88,9 +88,9 @@ def send_email(to_email, subject, body):
 
 ## ===================== STUNNING ANIMATED SIDEBAR — FINAL & COMPLETE =====================
 with st.sidebar:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/5/5f/Seal_of_Abia_State.svg", width=180)
+    st.image("assets/abia_logo.png", width=180)   # ← your own logo
     st.markdown("<h2 style='text-align:center; color:#006400;'>Navigation</h2>", unsafe_allow_html=True)
-    
+        
     st.markdown("""
     <style>
         .css-1v0mbdj a {
