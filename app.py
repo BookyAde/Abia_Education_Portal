@@ -86,7 +86,7 @@ def send_email(to_email, subject, body):
         st.error(f"❌ Email Error: {e}")
         return False
 
-# ===================== STUNNING ANIMATED SIDEBAR — FIXED VERSION =====================
+## ===================== STUNNING ANIMATED SIDEBAR — FINAL & COMPLETE =====================
 with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/commons/5/5f/Seal_of_Abia_State.svg", width=180)
     st.markdown("<h2 style='text-align:center; color:#006400;'>Navigation</h2>", unsafe_allow_html=True)
@@ -115,13 +115,31 @@ with st.sidebar:
     </style>
     """, unsafe_allow_html=True)
 
-    # THE ONLY THING THAT MATTERS — ADMIN GETS DIFFERENT MENU
+    # ===================== ADMIN MENU =====================
     if st.session_state.get("admin", False):
         selected = option_menu(
             menu_title=None,
-            options=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Panel", "Logout"],
-            icons=["house-fill", "graph-up-arrow", "cloud-upload-fill", "cloud-download-fill", "shield-lock-fill", "box-arrow-right"],
-            default_index=4,  # Opens directly on Admin Panel
+            options=[
+                "Home",
+                "Live Dashboard",
+                "Submit Data",
+                "Request Data",
+                "School Lookup",           # ← NEW: Search any school + report
+                "Transparency Ranking",    # ← Public leaderboard
+                "Admin Panel",
+                "Logout"
+            ],
+            icons=[
+                "house-fill",
+                "graph-up-arrow",
+                "cloud-upload-fill",
+                "cloud-download-fill",
+                "search-heart-fill",       # ← Perfect icon for lookup + care
+                "trophy-fill",
+                "shield-lock-fill",
+                "box-arrow-right"
+            ],
+            default_index=6,  # Opens on Admin Panel by default
             orientation="vertical",
             styles={
                 "container": {"padding": "0px", "background-color": "#f8fff8"},
@@ -129,15 +147,35 @@ with st.sidebar:
                 "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
             }
         )
-        # Handle logout
+        
         if selected == "Logout":
             st.session_state.admin = False
             st.rerun()
+
+    # ===================== PUBLIC / NORMAL USER MENU =====================
     else:
         selected = option_menu(
             menu_title=None,
-            options=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About"],
-            icons=["house-fill", "graph-up-arrow", "cloud-upload-fill", "cloud-download-fill", "shield-lock-fill", "person-circle"],
+            options=[
+                "Home",
+                "Live Dashboard",
+                "Submit Data",
+                "Request Data",
+                "School Lookup",           # ← NEW: Most important public feature
+                "Transparency Ranking",    # ← Public shaming/praise
+                "Admin Login",
+                "About"
+            ],
+            icons=[
+                "house-fill",
+                "graph-up-arrow",
+                "cloud-upload-fill",
+                "cloud-download-fill",
+                "search-heart-fill",       # ← Warm, caring icon
+                "trophy-fill",
+                "shield-lock-fill",
+                "person-circle"
+            ],
             default_index=0,
             orientation="vertical",
             styles={
@@ -146,7 +184,6 @@ with st.sidebar:
                 "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
             }
         )
-
 # ===================== DATA FUNCTIONS =====================
 @st.cache_data(ttl=60)
 def get_live_data():
@@ -314,6 +351,40 @@ elif selected == "Live Dashboard":
         st.success("ALL 17 LGAs • 100% VERIFIED • LIVE DATA")
     else:
         st.warning("No data available yet or database connection failed.")
+       
+    # === NEW: Facility Crisis Heatmap ===
+    st.markdown("### 🟥 Facility Crisis Heatmap Across Abia State")
+
+    facility_df = pd.read_sql("""
+        SELECT s.lga_name,
+               COUNT(*) as total_schools,
+               SUM(CASE WHEN s.facilities LIKE '%Toilets (Boys)%' THEN 1 ELSE 0 END) as has_boys_toilet,
+               SUM(CASE WHEN s.facilities LIKE '%Toilets (Girls)%' THEN 1 ELSE 0 END) as has_girls_toilet,
+               SUM(CASE WHEN s.facilities LIKE '%Clean Drinking Water%' THEN 1 ELSE 0 END) as has_water,
+               SUM(CASE WHEN s.facilities LIKE '%Electricity%' THEN 1 ELSE 0 END) as has_electricity
+        FROM school_submissions s
+        WHERE s.approved = TRUE
+        GROUP BY s.lga_name
+    """, engine)
+
+    if not facility_df.empty:
+        facility_df["No Toilet (Boys) %"] = 100 - round((facility_df["has_boys_toilet"] / facility_df["total_schools"]) * 100, 1)
+        facility_df["No Toilet (Girls) %"] = 100 - round((facility_df["has_girls_toilet"] / facility_df["total_schools"]) * 100, 1)
+        facility_df["No Water %"] = 100 - round((facility_df["has_water"] / facility_df["total_schools"]) * 100, 1)
+
+        fig = px.treemap(
+            facility_df,
+            path=['lga_name'],
+            values='total_schools',
+            color='No Toilet (Boys) %',
+            color_continuous_scale="Reds",
+            title="🚽 LGAs with Highest Toilet Crisis (Darker = Worse)"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("### Key Crisis Zones")
+        st.dataframe(facility_df[['lga_name', 'total_schools', 'No Toilet (Boys) %', 'No Toilet (Girls) %', 'No Water %']]
+                     .sort_values("No Toilet (Boys) %", ascending=False), use_container_width=True)
 
 elif selected == "Submit Data":
     st.markdown("### Submit School Data")
@@ -556,6 +627,229 @@ elif selected == "Request Data":
             )
             st.success("Your custom dataset is ready!")
             st.balloons()
+
+
+elif selected == "School Lookup":
+    st.markdown("# School Lookup")
+    st.markdown("### Search any school in Abia State • See real data • Report problems instantly")
+
+    # Search bar with live filtering
+    search = st.text_input(
+        "🔍 Search by school name or LGA",
+        placeholder="e.g. Community School Umuahia, Aba North, Ohafia",
+        help="Type anything — results appear instantly"
+    )
+
+    if not engine:
+        st.error("Database not connected")
+        st.stop()
+
+    # Load only approved schools
+    df = pd.read_sql("""
+        SELECT id, school_name, lga_name, enrollment_total, teachers_total,
+               submitted_by, email, submitted_at, photo_path, facilities
+        FROM school_submissions 
+        WHERE approved = TRUE
+        ORDER BY school_name
+    """, engine)
+
+    if df.empty:
+        st.warning("No verified schools yet.")
+    else:
+        # Live filter
+        if search:
+            mask = df['school_name'].str.contains(search, case=False, na=False) | \
+                   df['lga_name'].str.contains(search, case=False, na=False)
+            df = df[mask]
+
+        st.markdown(f"**Found {len(df)} school(s)**")
+
+        for _, row in df.iterrows():
+            with st.container():
+                col1, col2 = st.columns([1, 3])
+
+                # Photo
+                with col1:
+                    if row['photo_path'] and os.path.exists(row['photo_path']):
+                        st.image(row['photo_path'], use_container_width=True)
+                    else:
+                        st.image("https://via.placeholder.com/300x200?text=No+Photo", use_container_width=True)
+
+                # Details + Report Button
+                with col2:
+                    st.markdown(f"### {row['school_name']}")
+                    st.markdown(f"**LGA:** {row['lga_name']}  \n**Students:** {row['enrollment_total']:,}  \n**Teachers:** {row['teachers_total']:,}")
+
+                    # Facilities with icons
+                    facilities = eval(row['facilities']) if row['facilities'] else []
+                    st.markdown("**Working Facilities:**")
+                    icons = {
+                        "Toilets (Boys)": "Boys Toilet", "Toilets (Girls)": "Girls Toilet",
+                        "Clean Drinking Water": "Water", "Electricity": "Electricity",
+                        "Enough Desks": "Desks", "Perimeter Fencing": "Fencing",
+                        "Functional Classrooms": "Classrooms", "Computer Lab": "Computer"
+                    }
+                    cols = st.columns(4)
+                    for i, fac in enumerate(facilities):
+                        short = icons.get(fac, fac)
+                        with cols[i % 4]:
+                            st.success(f"{short}")
+
+                    # REPORT BUTTON
+                    if st.button("Report Issue at This School", key=f"report_{row['id']}", type="primary"):
+                        with st.form(f"report_form_{row['id']}"):
+                            st.error(f"Problem at: **{row['school_name']}**, {row['lga_name']}")
+                            issue = st.selectbox("What’s wrong?", [
+                                "No Toilets", "No Clean Water", "Leaking Roof", "No Teachers",
+                                "No Desks/Chairs", "Illegal Fees", "Security Issue", "Other"
+                            ])
+                            details = st.text_area("Describe the issue")
+                            contact = st.text_input("Your phone/email (optional)")
+
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                send = st.form_submit_button("Send Report", type="primary")
+                            with c2:
+                                cancel = st.form_submit_button("Cancel")
+
+                            if send:
+                                body = f"""
+NEW SCHOOL COMPLAINT
+School: {row['school_name']}
+LGA: {row['lga_name']}
+Issue: {issue}
+Details: {details}
+Contact: {contact or "Anonymous"}
+Time: {pd.Timestamp.now()}
+                                """
+                                if send_email("complaints@abiaeducation.gov.ng", f"URGENT: {issue} – {row['school_name']}", body):
+                                    st.success("Report sent! Thank you — action will be taken.")
+                                    st.balloons()
+                                else:
+                                    st.error("Failed to send")
+                            if cancel:
+                                st.rerun()
+
+                st.markdown("---")
+elif selected == "Transparency Ranking":
+    st.markdown("# LGA Education Transparency Ranking")
+    st.markdown("### Which LGA is leading in verified school data and facilities?")
+
+    if not engine:
+        st.error("Database not connected")
+        st.stop()
+
+    # Main ranking query
+    ranking = pd.read_sql("""
+        WITH stats AS (
+            SELECT 
+                lga_name,
+                COUNT(*) FILTER (WHERE approved = TRUE) AS verified_schools,
+                COUNT(*) AS total_submissions,
+                COUNT(*) FILTER (WHERE facilities LIKE '%Toilets (Boys)%') AS has_boys_toilet,
+                COUNT(*) FILTER (WHERE facilities LIKE '%Toilets (Girls)%') AS has_girls_toilet,
+                COUNT(*) FILTER (WHERE facilities LIKE '%Clean Drinking Water%') AS has_water
+            FROM school_submissions
+            WHERE approved = TRUE
+            GROUP BY lga_name
+        )
+        SELECT 
+            lga_name,
+            verified_schools,
+            total_submissions,
+            ROUND(100.0 * verified_schools / NULLIF(total_submissions, 0), 1) AS verification_rate_percent,
+            COALESCE(has_boys_toilet, 0) AS schools_with_boys_toilet,
+            COALESCE(has_girls_toilet, 0) AS schools_with_girls_toilet,
+            COALESCE(has_water, 0) AS schools_with_water,
+            ROUND(100.0 * COALESCE(has_boys_toilet, 0) / NULLIF(verified_schools, 0), 1) AS boys_toilet_coverage_pct,
+            ROUND(100.0 * COALESCE(has_girls_toilet, 0) / NULLIF(verified_schools, 0), 1) AS girls_toilet_coverage_pct,
+            ROUND(100.0 * COALESCE(has_water, 0) / NULLIF(verified_schools, 0), 1) AS water_coverage_pct
+        FROM stats
+        ORDER BY verified_schools DESC, verification_rate_percent DESC
+    """, engine)
+
+    if ranking.empty:
+        st.info("No verified data yet.")
+    else:
+        ranking.index = range(1, len(ranking) + 1)
+        ranking.index.name = "Rank"
+
+        # Display leaderboard
+        st.dataframe(
+            ranking.style
+            .background_gradient(subset=["verified_schools"], cmap="Greens")
+            .background_gradient(subset=["verification_rate_percent"], cmap="Blues")
+            .background_gradient(subset=["boys_toilet_coverage_pct"], cmap="Oranges")
+            .format({"verification_rate_percent": "{:.1f}%", "boys_toilet_coverage_pct": "{:.1f}%", "girls_toilet_coverage_pct": "{:.1f}%", "water_coverage_pct": "{:.1f}%"}),
+            use_container_width=True
+        )
+
+        # Highlight top & bottom
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success(f"Leading LGA: **{ranking.iloc[0]['lga_name']}** • {ranking.iloc[0]['verified_schools']} verified schools")
+        with col2:
+            st.error(f"Lagging LGA: **{ranking.iloc[-1]['lga_name']}** • Only {ranking.iloc[-1]['verified_schools']} verified")
+
+        st.markdown("---")
+        st.markdown("### Report Systemic Issues in Your LGA")
+        st.info("See something wrong across many schools in your LGA? Report it here — goes straight to the Ministry.")
+
+        for _, row in ranking.iterrows():
+            lga = row['lga_name']
+            with st.container():
+                c1, c2, c3 = st.columns([3, 4, 2])
+                with c1:
+                    st.markdown(f"#### {lga}")
+                    st.caption(f"Rank #{ranking.index[ranking['lga_name'] == lga][0]} • {row['verified_schools']} verified schools")
+                with c2:
+                    st.markdown(f"""
+                    **Toilet Coverage:** Boys {row['boys_toilet_coverage_pct']}% | Girls {row['girls_toilet_coverage_pct']}%  
+                    **Clean Water:** {row['water_coverage_pct']}% of schools
+                    """)
+                with c3:
+                    if st.button("Report LGA Issue", key=f"lga_report_{lga}", type="secondary", use_container_width=True):
+                        with st.form(f"lga_complaint_{lga}"):
+                            st.markdown(f"### Reporting Issue in **{lga} LGA**")
+                            issue = st.selectbox("Main Problem", [
+                                "Most schools have no toilets",
+                                "No clean drinking water in schools",
+                                "Widespread leaking roofs",
+                                "Ghost teachers / absent staff",
+                                "Illegal fees being charged",
+                                "No desks or chairs",
+                                "Security/fencing problems",
+                                "Other systemic issue"
+                            ], key=f"type_{lga}")
+                            details = st.text_area("Give details (optional)", placeholder="e.g. 8 out of 10 schools I visited have broken toilets...", key=f"det_{lga}")
+                            contact = st.text_input("Your contact (optional)", key=f"con_{lga}")
+
+                            cola, colb = st.columns(2)
+                            with cola:
+                                send = st.form_submit_button("Send Report", type="primary")
+                            with colb:
+                                cancel = st.form_submit_button("Cancel")
+
+                            if send:
+                                body = f"""
+SYSTEMIC COMPLAINT – {lga} LGA
+
+Issue: {issue}
+Details: {details}
+Reported by: {contact or "Anonymous"}
+Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}
+                                """
+                                if send_email("complaints@abiaeducation.gov.ng",
+                                            f"LGA ISSUE: {issue} – {lga}",
+                                            body):
+                                    st.success("Report sent! Thank you — this helps fix things faster.")
+                                    st.balloons()
+                                else:
+                                    st.error("Failed to send. Try again.")
+                            if cancel:
+                                st.rerun()
+
+                st.markdown("---")
 
 # ---------- ADMIN LOGIN ----------
 elif selected == "Admin Login":
