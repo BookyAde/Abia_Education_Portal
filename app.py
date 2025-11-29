@@ -86,7 +86,7 @@ def send_email(to_email, subject, body):
         st.error(f"❌ Email Error: {e}")
         return False
 
-# ===================== STUNNING ANIMATED SIDEBAR =====================
+# ===================== STUNNING ANIMATED SIDEBAR — FIXED VERSION =====================
 with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/commons/5/5f/Seal_of_Abia_State.svg", width=180)
     st.markdown("<h2 style='text-align:center; color:#006400;'>Navigation</h2>", unsafe_allow_html=True)
@@ -115,21 +115,37 @@ with st.sidebar:
     </style>
     """, unsafe_allow_html=True)
 
-    selected = option_menu(
-        menu_title=None,
-        options=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About"],
-        icons=["house-fill", "graph-up-arrow", "cloud-upload-fill", "cloud-download-fill", "shield-lock-fill", "person-circle"],
-        default_index=0,
-        orientation="vertical",
-        styles={
-            "container": {"padding": "0px", "background-color": "#f8fff8"},
-            "nav-link": {"font-size": "18px", "margin": "8px", "padding": "16px", "border-radius": "15px"},
-            "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
-        }
-    )
-
-    
-
+    # THE ONLY THING THAT MATTERS — ADMIN GETS DIFFERENT MENU
+    if st.session_state.get("admin", False):
+        selected = option_menu(
+            menu_title=None,
+            options=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Panel", "Logout"],
+            icons=["house-fill", "graph-up-arrow", "cloud-upload-fill", "cloud-download-fill", "shield-lock-fill", "box-arrow-right"],
+            default_index=4,  # Opens directly on Admin Panel
+            orientation="vertical",
+            styles={
+                "container": {"padding": "0px", "background-color": "#f8fff8"},
+                "nav-link": {"font-size": "18px", "margin": "8px", "padding": "16px", "border-radius": "15px"},
+                "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
+            }
+        )
+        # Handle logout
+        if selected == "Logout":
+            st.session_state.admin = False
+            st.rerun()
+    else:
+        selected = option_menu(
+            menu_title=None,
+            options=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About"],
+            icons=["house-fill", "graph-up-arrow", "cloud-upload-fill", "cloud-download-fill", "shield-lock-fill", "person-circle"],
+            default_index=0,
+            orientation="vertical",
+            styles={
+                "container": {"padding": "0px", "background-color": "#f8fff8"},
+                "nav-link": {"font-size": "18px", "margin": "8px", "padding": "16px", "border-radius": "15px"},
+                "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
+            }
+        )
 
 # ===================== DATA FUNCTIONS =====================
 @st.cache_data(ttl=60)
