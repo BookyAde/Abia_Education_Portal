@@ -86,11 +86,17 @@ def send_email(to_email, subject, body):
         st.error(f"❌ Email Error: {e}")
         return False
 
-## ===================== STUNNING ANIMATED SIDEBAR — FINAL & COMPLETE =====================
+# ===================== STUNNING SIDEBAR — FINAL & PERFECT =====================
 with st.sidebar:
-    st.image("assets/Abia_logo.jpeg", width=180)   # ← your own logo
+    # Your real Abia logo (fixed path + error fallback)
+    try:
+        st.image("assets/Abia_logo.jpeg", width=180, use_container_width=True)
+    except:
+        st.image("https://upload.wikimedia.org/wikipedia/commons/5/5f/Seal_of_Abia_State.svg", width=180)
+
     st.markdown("<h2 style='text-align:center; color:#006400;'>Navigation</h2>", unsafe_allow_html=True)
-        
+    
+    # Beautiful hover animation
     st.markdown("""
     <style>
         .css-1v0mbdj a {
@@ -124,8 +130,8 @@ with st.sidebar:
                 "Live Dashboard",
                 "Submit Data",
                 "Request Data",
-                "School Lookup",           # ← NEW: Search any school + report
-                "Transparency Ranking",    # ← Public leaderboard
+                "School Lookup",           # Citizens can search & report
+                "Transparency Ranking",    # Public leaderboard
                 "Admin Panel",
                 "Logout"
             ],
@@ -134,25 +140,36 @@ with st.sidebar:
                 "graph-up-arrow",
                 "cloud-upload-fill",
                 "cloud-download-fill",
-                "search-heart-fill",       # ← Perfect icon for lookup + care
+                "search-heart-fill",       # Best icon ever
                 "trophy-fill",
                 "shield-lock-fill",
                 "box-arrow-right"
             ],
-            default_index=6,  # Opens on Admin Panel by default
+            default_index=6,  # Opens directly on Admin Panel
             orientation="vertical",
             styles={
-                "container": {"padding": "0px", "background-color": "#f8fff8"},
-                "nav-link": {"font-size": "18px", "margin": "8px", "padding": "16px", "border-radius": "15px"},
-                "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
+                "container": {"padding": "8px", "background-color": "#f8fff8"},
+                "nav-link": {
+                    "font-size": "18px",
+                    "margin": "8px 0",
+                    "padding": "16px",
+                    "border-radius": "15px",
+                    "text-align": "left"
+                },
+                "nav-link-selected": {
+                    "background": "linear-gradient(90deg, #006400, #228B22)",
+                    "color": "white",
+                    "font-weight": "bold"
+                }
             }
         )
         
+        # Handle logout
         if selected == "Logout":
             st.session_state.admin = False
             st.rerun()
 
-    # ===================== PUBLIC / NORMAL USER MENU =====================
+    # ===================== PUBLIC USER MENU =====================
     else:
         selected = option_menu(
             menu_title=None,
@@ -161,8 +178,8 @@ with st.sidebar:
                 "Live Dashboard",
                 "Submit Data",
                 "Request Data",
-                "School Lookup",           # ← NEW: Most important public feature
-                "Transparency Ranking",    # ← Public shaming/praise
+                "School Lookup",           # The star feature
+                "Transparency Ranking",
                 "Admin Login",
                 "About"
             ],
@@ -171,7 +188,7 @@ with st.sidebar:
                 "graph-up-arrow",
                 "cloud-upload-fill",
                 "cloud-download-fill",
-                "search-heart-fill",       # ← Warm, caring icon
+                "search-heart-fill",
                 "trophy-fill",
                 "shield-lock-fill",
                 "person-circle"
@@ -179,9 +196,19 @@ with st.sidebar:
             default_index=0,
             orientation="vertical",
             styles={
-                "container": {"padding": "0px", "background-color": "#f8fff8"},
-                "nav-link": {"font-size": "18px", "margin": "8px", "padding": "16px", "border-radius": "15px"},
-                "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
+                "container": {"padding": "8px", "background-color": "#f8fff8"},
+                "nav-link": {
+                    "font-size": "18px",
+                    "margin": "8px 0",
+                    "padding": "16px",
+                    "border-radius": "15px",
+                    "text-align": "left"
+                },
+                "nav-link-selected": {
+                    "background": "linear-gradient(90deg, #006400, #228B22)",
+                    "color": "white",
+                    "font-weight": "bold"
+                }
             }
         )
 # ===================== DATA FUNCTIONS =====================
