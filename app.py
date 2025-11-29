@@ -162,17 +162,30 @@ def get_live_data():
         ORDER BY students DESC
     """, engine)
 
-def save_submission(school, lga, students, teachers, name, email):
-    if not engine: return False
+def save_submission(school, lga, students, teachers, name, email, facilities, photo_path):
+    if not engine:
+        return False
     try:
         with engine.begin() as conn:
             conn.execute(text("""
                 INSERT INTO school_submissions 
-                (school_name, lga_name, enrollment_total, teachers_total, submitted_by, email, submitted_at, approved)
-                VALUES (:s, :l, :e, :t, :n, :em, NOW(), NULL)
-            """), {"s": school, "l": lga, "e": int(students), "t": int(teachers), "n": name, "em": email})
+                (school_name, lga_name, enrollment_total, teachers_total, 
+                 submitted_by, email, facilities, photo_path, submitted_at, approved)
+                VALUES (:school, :lga, :students, :teachers, :name, :email, 
+                        :facilities::jsonb, :photo_path, NOW(), NULL)
+            """), {
+                "school": school,
+                "lga": lga,
+                "students": students,
+                "teachers": teachers,
+                "name": name,
+                "email": email,
+                "facilities": str(facilities),  # Stored as JSON string
+                "photo_path": photo_path
+            })
         return True
-    except:
+    except Exception as e:
+        st.error(f"Database error: {e}")
         return False
 
 # ===================== PAGES =====================
@@ -304,64 +317,161 @@ elif selected == "Live Dashboard":
 
 elif selected == "Submit Data":
     st.markdown("### Submit School Data")
-    st.info("Your school email is required for verification")
+    st.info("Your official school email is required • All submissions are verified")
 
+    # Load LGAs
     if engine:
         try:
             lgas = pd.read_sql("SELECT lga_name FROM dwh.dim_lga ORDER BY lga_name", engine)['lga_name'].tolist()
         except:
             lgas = []
-            st.error("Could not load LGAs. Please check database setup.")
+            st.error("Could not load LGAs. Check database connection.")
     else:
         lgas = []
+        st.error("Database not connected.")
 
-    if not st.session_state.get("awaiting_code"):
-        with st.form("send_code"):
-            school = st.text_input("School Name *")
-            lga = st.selectbox("LGA *", lgas)
-            students = st.number_input("Total Students *", min_value=1)
-            teachers = st.number_input("Total Teachers *", min_value=1)
-            name = st.text_input("Contact Name *")
-            email = st.text_input("Official School Email *")
+    # Ensure uploads folder exists
+    os.makedirs("uploads", exist_ok=True)
 
-            if st.form_submit_button("Send Verification Code"):
-                if not all([school, lga, students, teachers, name, email]) or "@" not in email:
-                    st.error("Fill all fields with valid email")
+    # ============= STEP 1: Fill Form & Send Code =============
+    if not st.session_state.get("awaiting_code", False):
+        with st.form("send_code_form", clear_on_submit=False):
+            st.markdown("#### School & Contact Information")
+            col1, col2 = st.columns(2)
+            with col1:
+                school = st.text_input("School Name *", placeholder="e.g. Community Secondary School Ohafia")
+                lga = st.selectbox("LGA *", options=lgas if lgas else ["Loading LGAs..."], disabled=not lgas)
+                name = st.text_input("Contact Name *", placeholder="Principal / Head Teacher")
+            with col2:
+                students = st.number_input("Total Students Enrolled *", min_value=1, step=1)
+                teachers = st.number_input("Total Teachers *", min_value=1, step=1)
+                email = st.text_input("Official School Email *", placeholder="principal.school@abiaschools.edu.ng")
+
+            st.markdown("#### School Facilities (Check all that currently work)")
+            facilities = st.multiselect(
+                "Select functional facilities",
+                [
+                    "Functional Toilets (Boys)",
+                    "Functional Toilets (Girls)",
+                    "Clean Drinking Water",
+                    "Electricity / Solar Power",
+                    "Enough Desks & Chairs (80%+ students seated)",
+                    "Perimeter Fencing",
+                    "Functional Classrooms (no leaking roof)",
+                    "Computer Lab / ICT Center"
+                ],
+                help="This helps the government prioritize support"
+            )
+
+            st.markdown("#### Upload Proof Photo *")
+            photo = st.file_uploader(
+                "Photo of school signboard, front gate, or building (required)",
+                type=['jpg', 'jpeg', 'png'],
+                help="Clear photo prevents fake submissions"
+            )
+
+            submitted = st.form_submit_button("Send Verification Code", type="primary")
+
+            if submitted:
+                if not all([school, lga and lga != "Loading LGAs...", students, teachers, name, email]):
+                    st.error("Please fill all required fields.")
+                elif "@" not in email:
+                    st.error("Please enter a valid email address.")
+                elif not facilities:
+                    st.error("Please select at least one facility (or none if none work).")
+                elif not photo:
+                    st.error("Photo is mandatory to verify the school exists.")
                 else:
-                    st.session_state.temp = {"school": school, "lga": lga, "students": students, "teachers": teachers, "name": name, "email": email}
+                    # Save photo
+                    timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+                    safe_school_name = "".join(c for c in school if c.isalnum() or c in " -_")[:50]
+                    filename = f"{safe_school_name}_{timestamp}.jpg"
+                    photo_path = f"uploads/{filename}"
+                    
+                    with open(photo_path, "wb") as f:
+                        f.write(photo.getbuffer())
+
+                    # Store all data in session
+                    st.session_state.temp_data = {
+                        "school": school,
+                        "lga": lga,
+                        "students": int(students),
+                        "teachers": int(teachers),
+                        "name": name,
+                        "email": email,
+                        "facilities": facilities,
+                        "photo_path": photo_path
+                    }
+
+                    # Generate and send code
                     code = random.randint(100000, 999999)
-                    
-                    # Send Email
-                    subject = "Your Abia Education Portal Verification Code"
-                    body = f"Hello {name},\n\nYour verification code for {school} is: {code}\n\nPlease enter this code on the portal to complete your submission.\n\nThank you,\nAbia Education Portal Team"
-                    
+                    subject = "Abia Education Portal – Your Verification Code"
+                    body = f"""
+Hello {name},
+
+Thank you for submitting data for **{school}**, {lga} LGA.
+
+Your 6-digit verification code is:
+
+**{code}**
+
+Enter this code on the portal to complete submission.
+
+This helps us ensure only real schools submit data.
+
+— Abia State Education Portal Team
+                    """
+
                     if send_email(email, subject, body):
-                        st.session_state.code = code
+                        st.session_state.verification_code = code
                         st.session_state.awaiting_code = True
-                        st.success(f"✅ Code sent to {email}")
+                        st.success(f"Verification code sent to {email}")
+                        st.balloons()
                         st.rerun()
                     else:
-                        st.error("Failed to send email. Please check the address or try again later.")
+                        st.error("Failed to send email. Check email address and try again.")
+
+    # ============= STEP 2: Enter Code & Final Submit =============
     else:
-        st.info(f"Code sent to **{st.session_state.temp['email']}**")
-        with st.form("verify"):
-            entered = st.text_input("Enter 6-digit code")
-            if st.form_submit_button("Verify & Submit"):
-                if str(st.session_state.code) == entered:
-                    if save_submission(**st.session_state.temp):
-                        # Send Success Email
+        temp = st.session_state.temp_data
+        st.info(f"Code sent to **{temp['email']}** • School: **{temp['school']}**")
+
+        with st.form("verify_code_form"):
+            code_input = st.text_input("Enter 6-digit verification code", max_chars=6)
+            submitted = st.form_submit_button("Verify & Submit Data", type="primary")
+
+            if submitted:
+                if code_input == str(st.session_state.verification_code):
+                    # Save to database
+                    success = save_submission(
+                        school=temp["school"],
+                        lga=temp["lga"],
+                        students=temp["students"],
+                        teachers=temp["teachers"],
+                        name=temp["name"],
+                        email=temp["email"],
+                        facilities=temp["facilities"],
+                        photo_path=temp["photo_path"]
+                    )
+
+                    if success:
                         send_email(
-                            st.session_state.temp['email'], 
-                            "Submission Received - Abia Education Portal",
-                            f"Hello {st.session_state.temp['name']},\n\nYour data for {st.session_state.temp['school']} has been received and is pending approval.\n\nYou will be notified once an admin reviews it.\n\nRegards,\nAbia Education Portal"
+                            temp["email"],
+                            "Submission Received – Abia Education Portal",
+                            f"Hello {temp['name']},\n\nYour data for {temp['school']} has been received and is pending admin approval.\n\nYou will be notified when it's live.\n\nThank you!\n— Abia Education Portal"
                         )
-                        st.success("Submitted successfully!")
+                        st.success("Submitted successfully! Pending approval.")
                         st.balloons()
-                        for k in ["temp", "code", "awaiting_code"]:
-                            st.session_state.pop(k, None)
+
+                        # Clear session
+                        for key in ["temp_data", "verification_code", "awaiting_code"]:
+                            st.session_state.pop(key, None)
                         st.rerun()
+                    else:
+                        st.error("Failed to save. Please try again.")
                 else:
-                    st.error("Wrong code")
+                    st.error("Incorrect code. Please check and try again.")
+    
 
 elif selected == "Request Data":
     st.markdown("""
