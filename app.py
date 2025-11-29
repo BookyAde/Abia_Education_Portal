@@ -104,18 +104,20 @@ with st.sidebar:
     </style>
     """, unsafe_allow_html=True)
 
-    selected = option_menu(
+
+    menu_choice = option_menu(
         menu_title=None,
         options=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About"],
         icons=["house-fill", "graph-up-arrow", "cloud-upload-fill", "cloud-download-fill", "shield-lock-fill", "person-circle"],
-        default_index=0,
+        default_index=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About"].index(st.session_state.selected),
         orientation="vertical",
-        styles={
-            "container": {"padding": "0px", "background-color": "#f8fff8"},
-            "nav-link": {"font-size": "18px", "margin": "8px", "padding": "16px", "border-radius": "15px"},
-            "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
-        }
     )
+
+    # update selection
+    st.session_state.selected = menu_choice
+
+    selected = st.session_state.selected
+
 
 # ===================== DATA FUNCTIONS =====================
 @st.cache_data(ttl=60)
