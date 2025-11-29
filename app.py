@@ -53,6 +53,17 @@ def get_db_connection():
 
 engine = get_db_connection()
 
+
+# ============ FIX: SESSION STATE INITIALIZATION & NAVIGATION OVERRIDE ============
+if 'admin' not in st.session_state:
+    st.session_state.admin = False
+if 'selected' not in st.session_state:
+    st.session_state.selected = "Home"  # or whatever your default is
+
+# CRITICAL: After login, FORCE the page to Admin Panel even if sidebar says otherwise
+if st.session_state.admin:
+    st.session_state.selected = "Admin Panel"
+
 # ===================== EMAIL FUNCTION =====================
 def send_email(to_email, subject, body):
     try:
