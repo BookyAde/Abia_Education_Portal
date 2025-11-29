@@ -15,6 +15,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
+import streamlit.components.v1 as components
 
 # ===================== FULL WIDE & PROFESSIONAL SETUP =====================
 st.set_page_config(page_title="Abia Education Portal", layout="wide")
@@ -476,8 +477,16 @@ elif selected == "Admin Panel":
                         st.warning("Rejected")
                         st.rerun()
 
+
 elif selected == "About":
-    st.markdown("""
+    components.html("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+    </head>
+    <body style="margin:0; padding:40px; background:#f0fff0; font-family:Arial;">
+    
     <div style="background:#f8fff8; padding:50px; border-radius:25px; border-left:10px solid #006400; text-align:center; box-shadow:0 10px 30px rgba(0,100,0,0.2);">
         <h1 style="color:#006400; font-size:48px; margin-bottom:20px;">About the Portal</h1>
         
@@ -525,4 +534,7 @@ elif selected == "About":
             <p>Official Government Initiative • Powered by <strong>Abia TechRice</strong></p>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+
+    </body>
+    </html>
+    """, height=2000, scrolling=True)
