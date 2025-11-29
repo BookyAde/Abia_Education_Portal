@@ -417,14 +417,6 @@ elif selected == "Request Data":
             st.success("Your custom dataset is ready!")
             st.balloons()
 
-# ---------- SESSION STATE SETUP ----------
-if "admin" not in st.session_state:
-    st.session_state.admin = False
-
-if "selected" not in st.session_state:
-    st.session_state.selected = "Home"
-
-
 # ---------- ADMIN LOGIN ----------
 elif selected == "Admin Login":
     st.markdown("### Admin Access")
