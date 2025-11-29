@@ -739,7 +739,6 @@ elif selected == "Transparency Ranking":
         st.error("Database not connected")
         st.stop()
 
-    # Main ranking query
     ranking = pd.read_sql("""
         WITH stats AS (
             SELECT 
@@ -761,11 +760,11 @@ elif selected == "Transparency Ranking":
             COALESCE(has_boys_toilet, 0) AS schools_with_boys_toilet,
             COALESCE(has_girls_toilet, 0) AS schools_with_girls_toilet,
             COALESCE(has_water, 0) AS schools_with_water,
-            ROUND(100.0 * COALESCE(has_boys_toilet, 0) / NULLIF(verified_schools, 0), 1) AS boys_toilet_coverage_pct,
-            ROUND(100.0 * COALESCE(has_girls_toilet, 0) / NULLIF(verified_schools, 0), 1) AS girls_toilet_coverage_pct,
-            ROUND(100.0 * COALESCE(has_water, 0) / NULLIF(verified_schools, 0), 1) AS water_coverage_pct
+            ROUND(100.0 * COALESCE(has_boys_toilet, 0) / NULLIF(verified_schools, 0), 1) AS boys_toilet_pct,
+            ROUND(100.0 * COALESCE(has_girls_toilet, 0) / NULLIF(verified_schools, 0), 1) AS girls_toilet_pct,
+            ROUND(100.0 * COALESCE(has_water, 0) / NULLIF(verified_schools, 0), 1) AS water_pct
         FROM stats
-        ORDER BY verified_schools DESC, verification_rate_percent DESC
+        ORDER BY verified_schools DESC
     """, engine)
 
     if ranking.empty:
@@ -774,82 +773,40 @@ elif selected == "Transparency Ranking":
         ranking.index = range(1, len(ranking) + 1)
         ranking.index.name = "Rank"
 
-        # Display leaderboard
-        st.dataframe(
-            ranking.style
-            .background_gradient(subset=["verified_schools"], cmap="Greens")
-            .background_gradient(subset=["verification_rate_percent"], cmap="Blues")
-            .background_gradient(subset=["boys_toilet_coverage_pct"], cmap="Oranges")
-            .format({"verification_rate_percent": "{:.1f}%", "boys_toilet_coverage_pct": "{:.1f}%", "girls_toilet_coverage_pct": "{:.1f}%", "water_coverage_pct": "{:.1f}%"}),
-            use_container_width=True
-        )
+        # Simple, beautiful formatting WITHOUT matplotlib
+        def highlight_row(row):
+            if row.name == 1:
+                return ['background-color: #d4edda; font-weight: bold'] * len(row)  # Green for #1
+            elif row.name == len(ranking):
+                return ['background-color: #f8d7da; font-weight: bold'] * len(row)  # Red for last
+            else:
+                return [''] * len(row)
 
-        # Highlight top & bottom
+        styled = ranking.style\
+            .format({
+                "verification_rate_percent": "{:.1f}%",
+                "boys_toilet_pct": "{:.1f}%",
+                "girls_toilet_pct": "{:.1f}%",
+                "water_pct": "{:.1f}%"
+            })\
+            .apply(highlight_row, axis=1)\
+            .set_properties(**{'text-align': 'center'})\
+            .set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#006400'), ('color', 'white'), ('font-weight', 'bold')]},
+                {'selector': 'td', 'props': [('padding', '12px'), ('border', '1px solid #ddd')]}
+            ])
+
+        st.dataframe(styled, use_container_width=True)
+
+        # Top & Bottom highlight
         col1, col2 = st.columns(2)
         with col1:
-            st.success(f"Leading LGA: **{ranking.iloc[0]['lga_name']}** • {ranking.iloc[0]['verified_schools']} verified schools")
+            st.success(f"Leading LGA: **{ranking.iloc[0]['lga_name']}** • {ranking.iloc[0]['verified_schools']} schools")
         with col2:
-            st.error(f"Lagging LGA: **{ranking.iloc[-1]['lga_name']}** • Only {ranking.iloc[-1]['verified_schools']} verified")
+            st.error(f"Lagging LGA: **{ranking.iloc[-1]['lga_name']}** • Only {ranking.iloc[-1]['verified_schools']} schools")
 
         st.markdown("---")
-        st.markdown("### Report Systemic Issues in Your LGA")
-        st.info("See something wrong across many schools in your LGA? Report it here — goes straight to the Ministry.")
-
-        for _, row in ranking.iterrows():
-            lga = row['lga_name']
-            with st.container():
-                c1, c2, c3 = st.columns([3, 4, 2])
-                with c1:
-                    st.markdown(f"#### {lga}")
-                    st.caption(f"Rank #{ranking.index[ranking['lga_name'] == lga][0]} • {row['verified_schools']} verified schools")
-                with c2:
-                    st.markdown(f"""
-                    **Toilet Coverage:** Boys {row['boys_toilet_coverage_pct']}% | Girls {row['girls_toilet_coverage_pct']}%  
-                    **Clean Water:** {row['water_coverage_pct']}% of schools
-                    """)
-                with c3:
-                    if st.button("Report LGA Issue", key=f"lga_report_{lga}", type="secondary", use_container_width=True):
-                        with st.form(f"lga_complaint_{lga}"):
-                            st.markdown(f"### Reporting Issue in **{lga} LGA**")
-                            issue = st.selectbox("Main Problem", [
-                                "Most schools have no toilets",
-                                "No clean drinking water in schools",
-                                "Widespread leaking roofs",
-                                "Ghost teachers / absent staff",
-                                "Illegal fees being charged",
-                                "No desks or chairs",
-                                "Security/fencing problems",
-                                "Other systemic issue"
-                            ], key=f"type_{lga}")
-                            details = st.text_area("Give details (optional)", placeholder="e.g. 8 out of 10 schools I visited have broken toilets...", key=f"det_{lga}")
-                            contact = st.text_input("Your contact (optional)", key=f"con_{lga}")
-
-                            cola, colb = st.columns(2)
-                            with cola:
-                                send = st.form_submit_button("Send Report", type="primary")
-                            with colb:
-                                cancel = st.form_submit_button("Cancel")
-
-                            if send:
-                                body = f"""
-SYSTEMIC COMPLAINT – {lga} LGA
-
-Issue: {issue}
-Details: {details}
-Reported by: {contact or "Anonymous"}
-Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}
-                                """
-                                if send_email("complaints@abiaeducation.gov.ng",
-                                            f"LGA ISSUE: {issue} – {lga}",
-                                            body):
-                                    st.success("Report sent! Thank you — this helps fix things faster.")
-                                    st.balloons()
-                                else:
-                                    st.error("Failed to send. Try again.")
-                            if cancel:
-                                st.rerun()
-
-                st.markdown("---")
+        st.caption("Green row = Best performing • Red row = Needs urgent attention")
 
 # ---------- ADMIN LOGIN ----------
 elif selected == "Admin Login":

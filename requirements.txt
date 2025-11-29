@@ -8,3 +8,4 @@ pillow
 xlsxwriter
 passlib[bcrypt]
 plotly
+matplotlib
