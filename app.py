@@ -79,44 +79,20 @@ def send_email(to_email, subject, body):
 with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/commons/5/5f/Seal_of_Abia_State.svg", width=180)
     st.markdown("<h2 style='text-align:center; color:#006400;'>Navigation</h2>", unsafe_allow_html=True)
-    
-    st.markdown("""
-    <style>
-        .css-1v0mbdj a {
-            border-radius: 15px !important;
-            margin: 10px 12px !important;
-            padding: 16px !important;
-            font-weight: 600 !important;
-            transition: all 0.4s ease !important;
-            border-left: 6px solid transparent;
-        }
-        .css-1v0mbdj a:hover {
-            background-color: rgba(50,205,50,0.25) !important;
-            border-left: 6px solid #32CD32 !important;
-            transform: translateX(10px);
-        }
-        .css-1v0mbdj a[data-baseweb="menu-item"][aria-current="page"] {
-            background: linear-gradient(90deg, #006400, #228B22) !important;
-            color: white !important;
-            border-left: 6px solid #32CD32 !important;
-            box-shadow: 0 6px 20px rgba(0,100,0,0.4);
-        }
-    </style>
-    """, unsafe_allow_html=True)
 
+    menu_options = ["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About"]
 
-    menu_choice = option_menu(
+    selected = option_menu(
         menu_title=None,
-        options=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About"],
+        options=menu_options,
         icons=["house-fill", "graph-up-arrow", "cloud-upload-fill", "cloud-download-fill", "shield-lock-fill", "person-circle"],
-        default_index=["Home", "Live Dashboard", "Submit Data", "Request Data", "Admin Login", "About"].index(st.session_state.selected),
-        orientation="vertical",
+        default_index=menu_options.index(st.session_state.selected),
+        orientation="vertical"
     )
 
-    # update selection
-    st.session_state.selected = menu_choice
+    st.session_state.selected = selected
 
-    selected = st.session_state.selected
+
 
 
 # ===================== DATA FUNCTIONS =====================
