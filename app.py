@@ -599,7 +599,7 @@ elif selected == "About":
             <h3 style="color:#228B22; margin:10px 0;">(BookyAde)</h3>
             <p style="font-size:22px; color:#333; margin:30px 0; line-height:1.8;">
                 Abia TechRice Cohort 2.0 • Class of 2025<br>
-                Full-Stack Developer • Data Champion • Proud Son of Abia State
+                Data Engineer • Data Champion • Proud Son of Abia State
             </p>
             <p style="margin:35px 0;">
                 <a href="https://github.com/BookyAde" style="color:#006400; font-size:20px; margin:0 25px; font-weight:bold;">GitHub</a>
