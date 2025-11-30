@@ -113,6 +113,7 @@ if selected == "Admin Panel" and not st.session_state.admin:
 
 
 # ===================== FINAL SIDEBAR – USER AUTHENTICATION READY =====================
+with st.sidebar:
 
     st.markdown("<h2 style='text-align:center; color:#006400;'>Navigation</h2>", unsafe_allow_html=True)
 
@@ -386,224 +387,248 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ===================== LOGIN / REGISTER PAGE – FINAL & PERFECT =====================
+## ===================== LOGIN / REGISTER PAGE =====================
 elif selected == "Login / Register":
     st.markdown("# Account Login & Registration")
-    st.markdown("### Secure access for schools and researchers")
+    st.markdown("### Secure access for schools and analysts")
 
-    tab1, tab2 = st.tabs(["Login", "Create Account"])
+    tab_login, tab_register = st.tabs(["Login", "Create Account"])
 
-    # ===================== LOGIN TAB =====================
-    with tab1:
+    # ============================================================
+    # LOGIN TAB
+    # ============================================================
+    with tab_login:
         st.markdown("#### Login to Your Account")
         with st.form("login_form"):
-            email = st.text_input("Email Address", placeholder="you@abiaschools.edu.ng")
+            email = st.text_input("Email Address", placeholder="you@abiaschools.edu.ng").strip().lower()
             password = st.text_input("Password", type="password")
-            login_btn = st.form_submit_button("Login", type="primary")
+            login_btn = st.form_submit_button("Login", type="primary", use_container_width=True)
 
-            if login_btn:
-                if not email or not password:
-                    st.error("Please enter both email and password")
-                elif not engine:
-                    st.error("Database not connected")
-                else:
+        if login_btn:
+            # Validations
+            if not email or not password:
+                st.error("Please enter both email and password.")
+            elif not engine:
+                st.error("Database not connected.")
+            else:
+                # Query user from DB
+                try:
                     df = pd.read_sql(
-                        "SELECT * FROM users WHERE email = :e",
+                        text("SELECT * FROM users WHERE email = :e"),
                         engine,
-                        params={"e": email.lower()}
+                        params={"e": email}
                     )
-                    if df.empty:
-                        st.error("No account found with this email")
-                    else:
-                        stored_hash = df.iloc[0]["password_hash"]
-                        if hash_password(password) != stored_hash:
-                            st.error("Incorrect password")
-                        elif not df.iloc[0]["email_verified"]:
-                            st.error("Please verify your email first")
-                        elif not df.iloc[0]["is_approved"]:
-                            st.warning("Your account is pending admin approval")
-                        else:
-                            st.session_state.user = df.iloc[0].to_dict()
-                            st.success(f"Welcome back, {st.session_state.user['full_name']}!")
-                            st.balloons()
-                            st.rerun()
+                except Exception as e:
+                    st.error(f"Database error: {e}")
+                    st.stop()
 
-    # ===================== REGISTER TAB =====================
-    with tab2:
-        st.markdown("#### Create New Account")
-        st.info("After registration → verify email → admin approves → full access")
-
-        with st.form("register_form", clear_on_submit=True):
-            st.markdown("**Personal Details**")
-            full_name = st.text_input("Full Name *", placeholder="e.g. Mrs. Grace Okafor")
-            email = st.text_input("Official Email *", placeholder="principal.school@abiaschools.edu.ng")
-            password = st.text_input("Password *", type="password")
-            confirm = st.text_input("Confirm Password *", type="password")
-
-            st.markdown("**Account Type**")
-            user_type = st.radio("I am registering as:", ["Institution (School)", "Researcher / Analyst"])
-
-            school_name = lga = None
-            if user_type == "Institution (School)":
-                school_name = st.text_input("School Name *")
-                lgas = pd.read_sql("SELECT lga_name FROM dwh.dim_lga ORDER BY lga_name", engine)['lga_name'].tolist() if engine else []
-                lga = st.selectbox("LGA *", lgas)
-
-            register_btn = st.form_submit_button("Create Account & Send Verification Code", type="primary")
-
-            if register_btn:
-                errors = []
-                if not all([full_name, email, password, confirm]):
-                    errors.append("All fields required")
-                if password != confirm:
-                    errors.append("Passwords do not match")
-                if len(password) < 6:
-                    errors.append("Password must be 6+ characters")
-                if "@" not in email:
-                    errors.append("Invalid email address")
-                if user_type == "Institution (School)" and (not school_name or not lga):
-                    errors.append("School name and LGA required")
-
-                if errors:
-                    for e in errors: st.error(e)
-                elif not engine:
-                    st.error("Database not connected")
+                if df.empty:
+                    st.error("No account found with this email.")
                 else:
-                    # Check if email exists
-                    exists = pd.read_sql("SELECT 1 FROM users WHERE email = :e", engine, params={"e": email.lower()})
-                    if not exists.empty:
-                        st.error("This email is already registered")
+                    user_row = df.iloc[0]
+
+                    # Password check
+                    if hash_password(password) != user_row["password_hash"]:
+                        st.error("Incorrect password.")
+                    elif not user_row["email_verified"]:
+                        st.warning("Please verify your email first.")
+                    elif not user_row["is_approved"]:
+                        st.warning("Your account is pending approval.")
                     else:
-                        code = random.randint(100000, 999999)
-                        hashed_pw = hash_password(password)
-
-                        try:
-                            with engine.begin() as conn:
-                                conn.execute(text("""
-                                    INSERT INTO users 
-                                    (email, password_hash, full_name, school_name, lga, user_type,
-                                     email_verified, is_approved, verification_code, created_at)
-                                    VALUES (:e, :p, :n, :s, :l, :t, FALSE, FALSE, :c, NOW())
-                                """), {
-                                    "e": email.lower(),
-                                    "p": hashed_pw,
-                                    "n": full_name,
-                                    "s": school_name,
-                                    "l": lga,
-                                    "t": "school" if user_type.startswith("Institution") else "analyst",
-                                    "c": code
-                                })
-
-                            body = f"""
-Hello {full_name},
-
-Welcome to the Abia State Education Portal!
-
-Your 6-digit verification code is:
-
-**{code}**
-
-Enter this code on the portal to verify your email.
-
-After verification, an administrator will review and approve your account.
-
-— Abia Education Portal Team
-                            """
-                            if send_email(email, "Verify Your Abia Portal Account", body):
-                                st.session_state.awaiting_verification = True
-                                st.session_state.verification_email = email.lower()
-                                st.success(f"Account created! Check **{email}** for your verification code")
-                                st.balloons()
-                            else:
-                                st.error("Failed to send email. Please try again.")
-                        except Exception as e:
-                            st.error("Registration failed. Please try again.")
-
-    # ===================== EMAIL VERIFICATION =====================
-    if st.session_state.get("awaiting_verification"):
-        st.markdown("### Verify Your Email")
-        st.info(f"Code sent to **{st.session_state.verification_email}**")
-
-        with st.form("verify_email_form"):
-            code_input = st.text_input("Enter 6-digit verification code", max_chars=6)
-            verify_btn = st.form_submit_button("Verify Email", type="primary")
-
-            if verify_btn:
-                if not code_input.isdigit():
-                    st.error("Code must be 6 digits")
-                elif not engine:
-                    st.error("Database error")
-                else:
-                    user = pd.read_sql(
-                        "SELECT * FROM users WHERE email = :e AND verification_code = :c",
-                        engine,
-                        params={"e": st.session_state.verification_email, "c": int(code_input)}
-                    )
-                    if user.empty:
-                        st.error("Invalid or expired code")
-                    else:
-                        with engine.begin() as conn:
-                            conn.execute(
-                                text("UPDATE users SET email_verified = TRUE, verification_code = NULL WHERE email = :e"),
-                                {"e": st.session_state.verification_email}
-                            )
-                        st.success("Email verified! Your account is now awaiting admin approval.")
+                        # Success
+                        st.session_state.user = user_row.to_dict()
+                        st.session_state.selected = "Home"
+                        st.success(f"Welcome back, {user_row['full_name']}!")
                         st.balloons()
-                        del st.session_state.awaiting_verification
-                        del st.session_state.verification_email
                         st.rerun()
+
+    # ============================================================
+    # REGISTER TAB
+    # ============================================================
+    with tab_register:
+        st.markdown("#### Create a New Account")
+        with st.form("register_form"):
+
+            full_name = st.text_input("Full Name").strip()
+            email = st.text_input("Email Address").strip().lower()
+            user_type = st.selectbox("Account Type", ["school", "analyst"])
+            password = st.text_input("Password", type="password")
+            confirm_pw = st.text_input("Confirm Password", type="password")
+
+            register_btn = st.form_submit_button("Create Account", type="primary", use_container_width=True)
+
+        if register_btn:
+
+            # -------- Validation --------
+            if not full_name or not email or not password:
+                st.error("All fields are required.")
+                st.stop()
+
+            if "@" not in email or "." not in email:
+                st.error("Please enter a valid email.")
+                st.stop()
+
+            if password != confirm_pw:
+                st.error("Passwords do not match.")
+                st.stop()
+
+            if len(password) < 6:
+                st.error("Password must be at least 6 characters.")
+                st.stop()
+
+            # -------- Insert into DB --------
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        INSERT INTO users (full_name, email, user_type, password_hash, email_verified, is_approved)
+                        VALUES (:n, :e, :t, :p, FALSE, FALSE)
+                    """),
+                    {
+                        "n": full_name,
+                        "e": email,
+                        "t": user_type,
+                        "p": hash_password(password)
+                    })
+            except Exception as e:
+                if "duplicate" in str(e).lower():
+                    st.error("An account with this email already exists.")
+                else:
+                    st.error(f"Registration failed: {e}")
+                st.stop()
+
+            # -------- Email verification (optional) --------
+            try:
+                send_email(
+                    email,
+                    "Verify your email - Abia Education Portal",
+                    f"Hello {full_name},\n\nPlease verify your email to access the portal.\n"
+                )
+            except Exception as e:
+                st.warning(f"Account created, but email not sent: {e}")
+
+            st.success("Account created successfully! Please verify your email before logging in.")
+            st.balloons()
+            st.stop()
+
 elif selected == "Live Dashboard":
     st.markdown("### Live Education Statistics • Abia State")
+
+    # Auto-refresh every 60 seconds
     st_autorefresh(interval=60000, key="live")
-    df = get_live_data()
 
-    if not df.empty:
+    # -------- Load live aggregated data safely --------
+    try:
+        df = get_live_data()
+    except Exception as e:
+        st.error(f"Failed to load live data: {e}")
+        df = pd.DataFrame()
+
+    if df.empty:
+        st.warning("No data available yet or database connection failed.")
+    else:
+        # Ensure numeric safety
+        df['students'] = pd.to_numeric(df['students'], errors='coerce').fillna(0)
+        df['teachers'] = pd.to_numeric(df['teachers'], errors='coerce').fillna(0)
+
+        # Preload school count once
+        try:
+            school_count = pd.read_sql(
+                text("SELECT COUNT(*) AS c FROM school_submissions WHERE approved = TRUE"),
+                con=engine
+            ).iloc[0, 0]
+        except:
+            school_count = 0
+
+        # ----------- Metrics Row -----------
         col1, col2, col3, col4 = st.columns(4)
-        with col1: st.metric("Total Students", f"{int(df['students'].sum()):,}")
-        with col2: st.metric("Total Teachers", f"{int(df['teachers'].sum()):,}")
-        with col3: st.metric("Verified Schools", f"{pd.read_sql('SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE', engine).iloc[0,0]:,}")
-        with col4: st.metric("LGAs", "17", "Complete")
+        with col1:
+            st.metric("Total Students", f"{int(df['students'].sum()):,}")
+        with col2:
+            st.metric("Total Teachers", f"{int(df['teachers'].sum()):,}")
+        with col3:
+            st.metric("Verified Schools", f"{school_count:,}")
+        with col4:
+            st.metric("LGAs", "17", "Complete")
 
+        # ----------- Students by LGA -----------
         col1, col2 = st.columns(2)
         with col1:
-            fig = px.bar(df, x='lga_name', y='students', color='students', color_continuous_scale="Greens", title="Students by LGA")
-            st.plotly_chart(fig, use_container_width=True)
-        with col2:
-            fig = px.bar(df, x='lga_name', y='teachers', color='teachers', color_continuous_scale="Blues", title="Teachers by LGA")
+            fig = px.bar(
+                df, x='lga_name', y='students', 
+                color='students', color_continuous_scale="Greens",
+                title="Students by LGA"
+            )
             st.plotly_chart(fig, use_container_width=True)
 
+        with col2:
+            fig = px.bar(
+                df, x='lga_name', y='teachers', 
+                color='teachers', color_continuous_scale="Blues",
+                title="Teachers by LGA"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        # ----------- Pie Charts -----------
         col1, col2 = st.columns(2)
         with col1:
-            fig = px.pie(df, values='students', names='lga_name', title="Student Share")
+            fig = px.pie(
+                df, values='students', names='lga_name', 
+                title="Student Share by LGA"
+            )
             st.plotly_chart(fig, use_container_width=True)
+
         with col2:
-            fig = px.pie(df, values='teachers', names='lga_name', title="Teacher Share")
+            fig = px.pie(
+                df, values='teachers', names='lga_name',
+                title="Teacher Share by LGA"
+            )
             st.plotly_chart(fig, use_container_width=True)
 
         st.success("ALL 17 LGAs • 100% VERIFIED • LIVE DATA")
-    else:
-        st.warning("No data available yet or database connection failed.")
-       
-    # === NEW: Facility Crisis Heatmap ===
+
+    # ------------------- FACILITY CRISIS HEATMAP --------------------
     st.markdown("### 🟥 Facility Crisis Heatmap Across Abia State")
 
-    facility_df = pd.read_sql("""
-        SELECT s.lga_name,
-               COUNT(*) as total_schools,
-               SUM(CASE WHEN s.facilities LIKE '%Toilets (Boys)%' THEN 1 ELSE 0 END) as has_boys_toilet,
-               SUM(CASE WHEN s.facilities LIKE '%Toilets (Girls)%' THEN 1 ELSE 0 END) as has_girls_toilet,
-               SUM(CASE WHEN s.facilities LIKE '%Clean Drinking Water%' THEN 1 ELSE 0 END) as has_water,
-               SUM(CASE WHEN s.facilities LIKE '%Electricity%' THEN 1 ELSE 0 END) as has_electricity
-        FROM school_submissions s
-        WHERE s.approved = TRUE
-        GROUP BY s.lga_name
-    """, engine)
+    if not engine:
+        st.error("Database not connected.")
+        st.stop()
+
+    try:
+        facility_df = pd.read_sql(text("""
+            SELECT 
+                s.lga_name,
+                COUNT(*) AS total_schools,
+                SUM(CASE WHEN COALESCE(s.facilities,'') LIKE '%Toilets (Boys)%' THEN 1 ELSE 0 END) AS has_boys_toilet,
+                SUM(CASE WHEN COALESCE(s.facilities,'') LIKE '%Toilets (Girls)%' THEN 1 ELSE 0 END) AS has_girls_toilet,
+                SUM(CASE WHEN COALESCE(s.facilities,'') LIKE '%Clean Drinking Water%' THEN 1 ELSE 0 END) AS has_water,
+                SUM(CASE WHEN COALESCE(s.facilities,'') LIKE '%Electricity%' THEN 1 ELSE 0 END) AS has_electricity
+            FROM school_submissions s
+            WHERE s.approved = TRUE
+            GROUP BY s.lga_name
+        """), con=engine)
+    except Exception as e:
+        st.error(f"Failed to load facility statistics: {e}")
+        st.stop()
 
     if not facility_df.empty:
-        facility_df["No Toilet (Boys) %"] = 100 - round((facility_df["has_boys_toilet"] / facility_df["total_schools"]) * 100, 1)
-        facility_df["No Toilet (Girls) %"] = 100 - round((facility_df["has_girls_toilet"] / facility_df["total_schools"]) * 100, 1)
-        facility_df["No Water %"] = 100 - round((facility_df["has_water"] / facility_df["total_schools"]) * 100, 1)
+        # Avoid division by zero
+        facility_df["No Toilet (Boys) %"] = facility_df.apply(
+            lambda x: 100 - round((x["has_boys_toilet"] / x["total_schools"]) * 100, 1)
+            if x["total_schools"] > 0 else 0,
+            axis=1
+        )
+        facility_df["No Toilet (Girls) %"] = facility_df.apply(
+            lambda x: 100 - round((x["has_girls_toilet"] / x["total_schools"]) * 100, 1)
+            if x["total_schools"] > 0 else 0,
+            axis=1
+        )
+        facility_df["No Water %"] = facility_df.apply(
+            lambda x: 100 - round((x["has_water"] / x["total_schools"]) * 100, 1)
+            if x["total_schools"] > 0 else 0,
+            axis=1
+        )
 
+        # ----------- Treemap Visualization -----------
         fig = px.treemap(
             facility_df,
             path=['lga_name'],
@@ -614,9 +639,16 @@ elif selected == "Live Dashboard":
         )
         st.plotly_chart(fig, use_container_width=True)
 
+        # ----------- Crisis Table -----------
         st.markdown("### Key Crisis Zones")
-        st.dataframe(facility_df[['lga_name', 'total_schools', 'No Toilet (Boys) %', 'No Toilet (Girls) %', 'No Water %']]
-                     .sort_values("No Toilet (Boys) %", ascending=False), use_container_width=True)
+        st.dataframe(
+            facility_df[
+                ["lga_name", "total_schools", 
+                 "No Toilet (Boys) %", "No Toilet (Girls) %", "No Water %"]
+            ].sort_values("No Toilet (Boys) %", ascending=False),
+            use_container_width=True
+        )
+
 
 elif selected == "Submit Data":
     st.markdown("### Submit School Data")
@@ -797,76 +829,131 @@ This ensures only real schools submit data.
 elif selected == "Request Data":
     st.markdown("""
     <div class='card'>
-        <h2>Download Verified Dataset</h2>
-        <p>Use the filters below to download exactly the data you need — by LGA, status, date, or keyword.</p>
+        <h2>Download Education Dataset</h2>
+        <p>Filter by LGA, approval status, dates, or keywords. Export to Excel in one click.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    # Load full approved data
+    # Load full data
+    if not engine:
+        st.error("Database not connected.")
+        st.stop()
+
     try:
-        if engine:
-            df = pd.read_sql("""
-                SELECT id, school_name, lga_name, enrollment_total, teachers_total, 
-                       submitted_by, email, submitted_at,
-                       CASE WHEN approved=TRUE THEN 'Approved' WHEN approved=FALSE THEN 'Rejected' ELSE 'Pending' END AS status
-                FROM school_submissions 
-                ORDER BY submitted_at DESC
-            """, engine)
-        else:
-            df = pd.DataFrame()
+        df = pd.read_sql(text("""
+            SELECT id, school_name, lga_name, enrollment_total, teachers_total,
+                   submitted_by, email, submitted_at,
+                   CASE 
+                       WHEN approved = TRUE THEN 'Approved'
+                       WHEN approved = FALSE THEN 'Rejected'
+                       ELSE 'Pending'
+                   END AS status
+            FROM school_submissions
+            ORDER BY submitted_at DESC
+        """), con=engine)
     except Exception as e:
-        st.error("Failed to load data")
+        st.error(f"Failed to load data: {e}")
         st.stop()
 
     if df.empty:
-        st.info("No submissions yet.")
-    else:
-        # FILTERS — Full control
-        col1, col2 = st.columns(2)
-        with col1:
-            lga_filter = st.multiselect("LGA", options=["All"] + sorted(df['lga_name'].unique()), default="All")
-            status_filter = st.multiselect("Status", options=["All", "Approved", "Pending", "Rejected"], default="Approved")
+        st.info("No submissions found.")
+        st.stop()
 
-        with col2:
-            # Date range
-            date_range = st.date_input("Submission Date Range", 
-                                     value=(df['submitted_at'].min().date(), df['submitted_at'].max().date()))
-            start_date, end_date = date_range if len(date_range) == 2 else (date_range[0], date_range[0])
+    # Ensure submitted_at is datetime
+    try:
+        df["submitted_at"] = pd.to_datetime(df["submitted_at"], errors="coerce")
+    except:
+        st.error("Date parsing failed.")
+        st.stop()
 
-        # Keyword search
-        search = st.text_input("Search school name, submitter, or email", "")
+    # FILTERS
+    col1, col2 = st.columns(2)
 
-        # Apply filters
-        filtered = df.copy()
-        if "All" not in lga_filter and lga_filter:
-            filtered = filtered[filtered['lga_name'].isin(lga_filter)]
-        if "All" not in status_filter and status_filter:
-            filtered = filtered[filtered['status'].isin(status_filter)]
+    # ====== LGA + STATUS FILTERS ======
+    with col1:
+        lga_options = ["All"] + sorted(df['lga_name'].dropna().unique().tolist())
+        lga_filter = st.multiselect("Filter by LGA", lga_options, default="All")
+
+        # Force 'All' to be exclusive
+        if "All" in lga_filter and len(lga_filter) > 1:
+            lga_filter = ["All"]
+
+        status_options = ["All", "Approved", "Pending", "Rejected"]
+        status_filter = st.multiselect("Filter by Status", status_options, default="Approved")
+
+        if "All" in status_filter and len(status_filter) > 1:
+            status_filter = ["All"]
+
+    # ====== DATE RANGE ======
+    with col2:
+        min_date = df['submitted_at'].min().date()
+        max_date = df['submitted_at'].max().date()
+
+        date_range = st.date_input(
+            "Submission Date Range",
+            value=(min_date, max_date)
+        )
+
+        if isinstance(date_range, tuple) and len(date_range) == 2:
+            start_date, end_date = date_range
+        else:
+            start_date = end_date = date_range
+
+    # ====== KEYWORD SEARCH ======
+    search = st.text_input("Search school name, submitter, or email", "")
+
+    # ====== APPLY FILTERS ======
+    filtered = df.copy()
+
+    # LGA
+    if "All" not in lga_filter:
+        filtered = filtered[filtered["lga_name"].isin(lga_filter)]
+
+    # Status
+    if "All" not in status_filter:
+        filtered = filtered[filtered["status"].isin(status_filter)]
+
+    # Date range
+    filtered = filtered[
+        (filtered['submitted_at'].dt.date >= start_date) &
+        (filtered['submitted_at'].dt.date <= end_date)
+    ]
+
+    # Keyword search
+    if search.strip():
+        s = search.lower().strip()
         filtered = filtered[
-            (pd.to_datetime(filtered['submitted_at']).dt.date >= start_date) &
-            (pd.to_datetime(filtered['submitted_at']).dt.date <= end_date)
+            filtered["school_name"].fillna("").str.lower().str.contains(s) |
+            filtered["submitted_by"].fillna("").str.lower().str.contains(s) |
+            filtered["email"].fillna("").str.lower().str.contains(s)
         ]
-        if search:
-            filtered = filtered[
-                filtered['school_name'].str.contains(search, case=False, na=False) |
-                filtered['submitted_by'].str.contains(search, case=False, na=False) |
-                filtered['email'].str.contains(search, case=False, na=False)
-            ]
 
-        # Results
-        st.markdown(f"**Found {len(filtered):,} records**")
-        st.dataframe(filtered.head(200), use_container_width=True)
+    # RESULTS
+    st.markdown(f"### **{len(filtered):,} records found**")
+    st.dataframe(filtered.head(200), use_container_width=True)
 
-        # DOWNLOAD BUTTON
-        if st.button("Generate & Download Excel", type="primary"):
+    st.markdown("---")
+
+    # ====== EXCEL DOWNLOAD ======
+    if st.button("Generate & Download Excel", type="primary", use_container_width=True):
+        try:
             output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                filtered.to_excel(writer, index=False, sheet_name='Abia_Education_Data')
+            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                filtered.to_excel(writer, index=False, sheet_name="Abia_Education_Data")
+
+                # Format header
                 workbook = writer.book
-                header_format = workbook.add_format({'bold': True, 'bg_color': '#006400', 'font_color': 'white'})
-                for col_num, value in enumerate(filtered.columns.values):
-                    writer.sheets['Abia_Education_Data'].write(0, col_num, value, header_format)
-                    writer.sheets['Abia_Education_Data'].set_column(col_num, col_num, 20)
+                worksheet = writer.sheets["Abia_Education_Data"]
+                header_format = workbook.add_format({
+                    "bold": True,
+                    "bg_color": "#006400",
+                    "font_color": "white"
+                })
+
+                for col_num, col_name in enumerate(filtered.columns):
+                    worksheet.write(0, col_num, col_name, header_format)
+                    worksheet.set_column(col_num, col_num, 20)
+
             output.seek(0)
 
             st.download_button(
@@ -875,90 +962,141 @@ elif selected == "Request Data":
                 file_name=f"Abia_Education_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
             st.success("Your custom dataset is ready!")
             st.balloons()
+
+        except Exception as e:
+            st.error(f"Failed to generate Excel file: {e}")
+
 
 
 elif selected == "School Lookup":
     st.markdown("# School Lookup")
-    st.markdown("### Search any school in Abia State • See real data • Report problems instantly")
+    st.markdown("### Search any school in Abia State • View verified records • Report issues instantly")
 
-    # Search bar with live filtering
+    # Search Bar
     search = st.text_input(
         "🔍 Search by school name or LGA",
-        placeholder="e.g. Community School Umuahia, Aba North, Ohafia",
-        help="Type anything — results appear instantly"
+        placeholder="e.g. Umuahia High School, Aba North, Ohafia",
+        help="Start typing to filter results"
     )
 
     if not engine:
-        st.error("Database not connected")
+        st.error("Database not connected.")
         st.stop()
 
-    # Load only approved schools
-    df = pd.read_sql("""
-        SELECT id, school_name, lga_name, enrollment_total, teachers_total,
-               submitted_by, email, submitted_at, photo_path, facilities
-        FROM school_submissions 
-        WHERE approved = TRUE
-        ORDER BY school_name
-    """, engine)
+    # Load verified (approved) schools
+    try:
+        df = pd.read_sql(text("""
+            SELECT id, school_name, lga_name, enrollment_total, teachers_total,
+                   submitted_by, email, submitted_at, photo_path, facilities
+            FROM school_submissions 
+            WHERE approved = TRUE
+            ORDER BY school_name
+        """), con=engine)
+    except Exception as e:
+        st.error(f"Failed to load schools: {e}")
+        st.stop()
 
     if df.empty:
-        st.warning("No verified schools yet.")
-    else:
-        # Live filter
-        if search:
-            mask = df['school_name'].str.contains(search, case=False, na=False) | \
-                   df['lga_name'].str.contains(search, case=False, na=False)
-            df = df[mask]
+        st.info("No verified schools found.")
+        st.stop()
 
-        st.markdown(f"**Found {len(df)} school(s)**")
+    # Apply live search
+    if search:
+        s = search.lower().strip()
+        df = df[
+            df["school_name"].str.lower().str.contains(s, na=False) |
+            df["lga_name"].str.lower().str.contains(s, na=False)
+        ]
 
-        for _, row in df.iterrows():
-            with st.container():
-                col1, col2 = st.columns([1, 3])
+    st.markdown(f"**Found {len(df)} school(s)**")
 
-                # Photo
-                with col1:
-                    if row['photo_path'] and os.path.exists(row['photo_path']):
-                        st.image(row['photo_path'], use_container_width=True)
-                    else:
-                        st.image("https://via.placeholder.com/300x200?text=No+Photo", use_container_width=True)
+    # Facility Mapping (same as Admin Panel)
+    FACILITY_MAP = {
+        "Functional Toilets (Boys)": "Boys Toilet",
+        "Functional Toilets (Girls)": "Girls Toilet",
+        "Clean Drinking Water": "Water",
+        "Electricity / Solar Power": "Electricity",
+        "Enough Desks & Chairs (80%+ students seated)": "Desks",
+        "Perimeter Fencing": "Fencing",
+        "Functional Classrooms (no leaking roof)": "Classrooms",
+        "Computer Lab / ICT Center.": "ICT Lab"
+    }
 
-                # Details + Report Button
-                with col2:
-                    st.markdown(f"### {row['school_name']}")
-                    st.markdown(f"**LGA:** {row['lga_name']}  \n**Students:** {row['enrollment_total']:,}  \n**Teachers:** {row['teachers_total']:,}")
+    # Loop results
+    for _, row in df.iterrows():
+        with st.container():
+            col1, col2 = st.columns([1, 3])
 
-                    # Facilities with icons
-                    facilities = eval(row['facilities']) if row['facilities'] else []
-                    st.markdown("**Working Facilities:**")
-                    icons = {
-                        "Toilets (Boys)": "Boys Toilet", "Toilets (Girls)": "Girls Toilet",
-                        "Clean Drinking Water": "Water", "Electricity": "Electricity",
-                        "Enough Desks": "Desks", "Perimeter Fencing": "Fencing",
-                        "Functional Classrooms": "Classrooms", "Computer Lab": "Computer"
-                    }
-                    cols = st.columns(4)
-                    for i, fac in enumerate(facilities):
-                        short = icons.get(fac, fac)
-                        with cols[i % 4]:
-                            st.success(f"{short}")
+            # ========== PHOTO COLUMN ==========
+            with col1:
+                photo = row.get("photo_path")
+                if photo and os.path.exists(photo):
+                    try:
+                        st.image(photo, use_container_width=True)
+                    except:
+                        st.image("https://via.placeholder.com/400x300?text=Image+Error", use_container_width=True)
+                else:
+                    st.image("https://via.placeholder.com/400x300?text=No+Photo", use_container_width=True)
 
-                    # REPORT BUTTON
-                    if st.button("Report Issue at This School", key=f"report_{row['id']}", type="primary"):
+            # ========== INFO COLUMN ==========
+            with col2:
+                st.markdown(f"### {row['school_name']}")
+                st.markdown(f"**LGA:** {row['lga_name']}")
+                st.markdown(f"**Students:** {int(row['enrollment_total']):,}")
+                st.markdown(f"**Teachers:** {int(row['teachers_total']):,}")
+
+                # ----- Facilities -----
+                st.markdown("#### Working Facilities")
+                raw_facilities = row.get("facilities")
+                facilities_list = []
+
+                # Safe parsing
+                if raw_facilities:
+                    try:
+                        facilities_list = json.loads(raw_facilities)
+                        if not isinstance(facilities_list, list):
+                            facilities_list = []
+                    except:
+                        try:
+                            facilities_list = ast.literal_eval(raw_facilities)
+                            if not isinstance(facilities_list, list):
+                                facilities_list = []
+                        except:
+                            st.warning("Facilities data invalid.")
+                            facilities_list = []
+
+                cols = st.columns(4)
+                for i, fac in enumerate(facilities_list):
+                    short = FACILITY_MAP.get(fac, fac)
+                    with cols[i % 4]:
+                        st.success(short)
+
+                st.markdown("---")
+
+                # ========== REPORT BUTTON ==========
+                report_key = f"report_{row['id']}"
+                if st.button("Report Issue at This School", key=report_key, use_container_width=True):
+
+                    with st.expander(f"Report Issue — {row['school_name']}"):
                         with st.form(f"report_form_{row['id']}"):
-                            st.error(f"Problem at: **{row['school_name']}**, {row['lga_name']}")
+                            st.warning(f"Reporting a problem for **{row['school_name']}**, {row['lga_name']}")
+
                             issue = st.selectbox("What’s wrong?", [
                                 "No Toilets", "No Clean Water", "Leaking Roof", "No Teachers",
                                 "No Desks/Chairs", "Illegal Fees", "Security Issue", "Other"
                             ])
+
                             details = st.text_area("Describe the issue")
                             contact = st.text_input("Your phone/email (optional)")
 
                             c1, c2 = st.columns(2)
+
                             with c1:
                                 send = st.form_submit_button("Send Report", type="primary")
+
                             with c2:
                                 cancel = st.form_submit_button("Cancel")
 
@@ -972,15 +1110,22 @@ Details: {details}
 Contact: {contact or "Anonymous"}
 Time: {pd.Timestamp.now()}
                                 """
-                                if send_email("complaints@abiaeducation.gov.ng", f"URGENT: {issue} – {row['school_name']}", body):
-                                    st.success("Report sent! Thank you — action will be taken.")
+                                try:
+                                    send_email(
+                                        "complaints@abiaeducation.gov.ng",
+                                        f"URGENT: {issue} – {row['school_name']}",
+                                        body
+                                    )
+                                    st.success("Report sent successfully. Thank you!")
                                     st.balloons()
-                                else:
-                                    st.error("Failed to send")
+                                except Exception as e:
+                                    st.error(f"Failed to send report: {e}")
+
                             if cancel:
                                 st.rerun()
 
-                st.markdown("---")
+        st.markdown("---")
+
 elif selected == "Transparency Ranking":
     st.markdown("# LGA Education Transparency Ranking")
     st.markdown("### Which LGA is leading in verified school data and facilities?")
@@ -1096,10 +1241,16 @@ elif selected == "Admin Login":
                 else:
                     st.error(f"Access denied ({st.session_state.login_attempts}/5)")
 
-# ---------- ADMIN PANEL (WITH FULL ACTIVITY LOGGING) ----------
+# ===================== ADMIN PANEL (SECURE + FULL ACTIVITY LOGGING) =====================
+import json
+import ast
+import os
+import csv
+from datetime import datetime
+
 elif selected == "Admin Panel":
 
-    # Double security check
+    # -------- SECURITY CHECK --------
     if not st.session_state.get("admin", False):
         st.error("Unauthorized access. Redirecting to Home...")
         st.session_state.selected = "Home"
@@ -1108,71 +1259,118 @@ elif selected == "Admin Panel":
     st.markdown("# ADMIN PANEL • Full Control")
     st.success("Logged in as Administrator")
 
+    # Determine admin identifier for logs (prefer session user/email if present)
+    admin_identifier = st.session_state.get("admin_user") \
+                       or (st.session_state.get("user") or {}).get("email") \
+                       or (st.session_state.get("user") or {}).get("full_name") \
+                       or "admin"
+
+    # Logout area (clears admin & returns home)
     col1, col2 = st.columns([3, 1])
     with col2:
-        if st.button("Logout", type="primary"):
+        if st.button("Logout", type="primary", use_container_width=True):
             st.session_state.admin = False
-            st.rerun()
+            # clear user session safely
+            if "user" in st.session_state:
+                st.session_state.pop("user", None)
+            st.session_state.selected = "Home"
+            st.experimental_rerun()
 
+    # -------- DB CHECK & LOAD PENDING SUBMISSIONS --------
     if not engine:
         st.error("Database not connected.")
         st.stop()
 
-    # Load pending submissions
-    pending = pd.read_sql("""
-        SELECT id, school_name, lga_name, enrollment_total, teachers_total, 
-               submitted_by, email, submitted_at, facilities, photo_path
-        FROM school_submissions 
-        WHERE approved IS NULL 
-        ORDER BY submitted_at DESC
-    """, engine)
+    try:
+        pending = pd.read_sql(text("""
+            SELECT id, school_name, lga_name, enrollment_total, teachers_total,
+                   submitted_by, email, submitted_at, facilities, photo_path
+            FROM school_submissions
+            WHERE approved IS NULL
+            ORDER BY submitted_at DESC
+        """), con=engine)
+    except Exception as e:
+        st.error(f"Failed to load pending submissions: {e}")
+        st.stop()
 
-    # =============== ADMIN ACTIVITY LOG FUNCTION ===============
+    # -------- Activity log function (safe append) --------
     def log_admin_action(action: str, submission_id: int, school_name: str, lga_name: str):
         log_entry = {
-            "timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "admin": "admin",  # You can later add real usernames
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "admin": admin_identifier,
             "action": action,
             "submission_id": submission_id,
             "school_name": school_name,
             "lga_name": lga_name
         }
-        # Save to file (works on Streamlit Cloud)
-        with open("admin_activity_log.csv", "a") as f:
-            import csv
-            writer = csv.DictWriter(f, fieldnames=log_entry.keys())
-            if f.tell() == 0:  # Write header if file is empty
-                writer.writeheader()
-            writer.writerow(log_entry)
+        logfile = "admin_activity_log.csv"
+        write_header = not os.path.exists(logfile)
+        # Append safe CSV (note: on multi-worker setups consider a DB or file lock)
+        try:
+            with open(logfile, "a", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=log_entry.keys())
+                if write_header:
+                    writer.writeheader()
+                writer.writerow(log_entry)
+        except Exception as e:
+            st.warning(f"Failed to write admin log: {e}")
 
-    # =============== DISPLAY PENDING SUBMISSIONS ===============
+    # -------- UI: Pending list --------
+    st.subheader(f"Pending Submissions ({len(pending):,})")
     if pending.empty:
-        st.success("No pending submissions")
-        st.balloons()
+        st.info("No pending submissions at this time.")
     else:
-        st.markdown(f"### {len(pending)} Pending Submission(s)")
-
+        # Iterate over rows and show expanders
         for _, row in pending.iterrows():
-            with st.expander(f"**{row['school_name']}** • {row['lga_name']} • Submitted {row['submitted_at'].strftime('%b %d, %Y')}", expanded=False):
-                
-                col1, col2 = st.columns([1, 2])
-                
-                # LEFT: Photo + Info
-                with col1:
-                    st.markdown(f"**Students:** {row['enrollment_total']:,}")
-                    st.markdown(f"**Teachers:** {row['teachers_total']:,}")
-                    st.markdown(f"**Contact:** {row['submitted_by']}")
-                    st.markdown(f"**Email:** {row['email']}")
+            sub_id = int(row["id"])
+            submitted_at_str = ""
+            try:
+                submitted_at_str = pd.to_datetime(row["submitted_at"]).strftime("%b %d, %Y %H:%M")
+            except Exception:
+                submitted_at_str = str(row["submitted_at"])
 
-                    if row['photo_path'] and os.path.exists(row['photo_path']):
-                        st.image(row['photo_path'], caption="School Photo Proof", width=300)
+            with st.expander(f"#{sub_id} — {row.get('school_name','(Unknown)')} • {row.get('lga_name','(Unknown)')} • Submitted {submitted_at_str}"):
+                left, right = st.columns([1, 2])
+
+                # --- Left: Photo and basic info ---
+                with left:
+                    st.markdown(f"**Students:** {int(row.get('enrollment_total') or 0):,}")
+                    st.markdown(f"**Teachers:** {int(row.get('teachers_total') or 0):,}")
+                    st.markdown(f"**Contact:** {row.get('submitted_by') or 'N/A'}")
+                    st.markdown(f"**Email:** {row.get('email') or 'N/A'}")
+                    photo_path = row.get("photo_path")
+                    if photo_path and os.path.exists(photo_path):
+                        try:
+                            st.image(photo_path, caption="Photo proof", use_column_width=True)
+                        except Exception:
+                            st.warning("Photo exists but could not be displayed.")
                     else:
-                        st.warning("Photo missing")
+                        st.info("Photo missing or path invalid.")  # info instead of warning to reduce alarm
 
-                # RIGHT: Facilities + Actions
-                with col2:
+                # --- Right: Facilities and actions ---
+                with right:
                     st.markdown("#### Functional Facilities")
-                    facilities = eval(row['facilities']) if row['facilities'] else []
+                    raw_facilities = row.get("facilities")
+                    facilities_list = []
+                    if raw_facilities:
+                        try:
+                            # Expecting JSON string like '["Functional Toilets (Boys)", ...]'
+                            if isinstance(raw_facilities, str):
+                                facilities_list = json.loads(raw_facilities)
+                            else:
+                                facilities_list = raw_facilities
+                            if not isinstance(facilities_list, list):
+                                facilities_list = []
+                        except Exception:
+                            # Try ast.literal_eval as fallback, but avoid eval()
+                            try:
+                                facilities_list = ast.literal_eval(raw_facilities)
+                                if not isinstance(facilities_list, list):
+                                    facilities_list = []
+                            except Exception:
+                                facilities_list = []
+                                st.error("Facilities data malformed.")
+                    # Map & display
                     facility_map = {
                         "Functional Toilets (Boys)": "Boys Toilet",
                         "Functional Toilets (Girls)": "Girls Toilet",
@@ -1184,63 +1382,85 @@ elif selected == "Admin Panel":
                         "Computer Lab / ICT Center.": "ICT Lab"
                     }
                     cols = st.columns(4)
-                    for i, (full, short) in enumerate(facility_map.items()):
+                    for i, (full_label, short_label) in enumerate(facility_map.items()):
                         with cols[i % 4]:
-                            if full in facilities:
-                                st.markdown(f"Yes {short}")
+                            if full_label in facilities_list:
+                                st.success(f"{short_label}: Yes")
                             else:
-                                st.markdown(f"No {short}")
+                                st.info(f"{short_label}: No")
 
-                    # === APPROVE / REJECT WITH LOGGING ===
+                    st.markdown("---")
                     c1, c2 = st.columns(2)
                     with c1:
-                        if st.button("APPROVE & Publish", key=f"approve_{row['id']}", type="primary"):
-                            with engine.begin() as conn:
-                                conn.execute(text("UPDATE school_submissions SET approved=TRUE WHERE id=:id"), {"id": row['id']})
-                                conn.execute(text("""
-                                    INSERT INTO dwh.fact_abia_metrics 
-                                    (lga_key, enrollment_total, teachers_total, approved)
-                                    SELECT l.lga_key, :e, :t, TRUE 
-                                    FROM dwh.dim_lga l WHERE l.lga_name=:lga
-                                    ON CONFLICT (lga_key) DO UPDATE SET 
-                                        enrollment_total = EXCLUDED.enrollment_total,
-                                        teachers_total = EXCLUDED.teachers_total
-                                """), {"e": row['enrollment_total'], "t": row['teachers_total'], "lga": row['lga_name']})
+                        if st.button("APPROVE & Publish", key=f"approve_{sub_id}", type="primary", use_container_width=True):
+                            # APPROVE — DB update + dwh sync + email + logging
+                            try:
+                                with engine.begin() as conn:
+                                    conn.execute(text("UPDATE school_submissions SET approved=TRUE WHERE id=:id"), {"id": sub_id})
+                                    # Optional: update DWH / fact table as in original intent
+                                    conn.execute(text("""
+                                        INSERT INTO dwh.fact_abia_metrics (lga_key, enrollment_total, teachers_total, approved)
+                                        SELECT l.lga_key, :e, :t, TRUE
+                                        FROM dwh.dim_lga l WHERE l.lga_name=:lga
+                                        ON CONFLICT (lga_key) DO UPDATE SET
+                                           enrollment_total = EXCLUDED.enrollment_total,
+                                           teachers_total = EXCLUDED.teachers_total
+                                    """), {"e": int(row.get("enrollment_total") or 0), "t": int(row.get("teachers_total") or 0), "lga": row.get("lga_name")})
+                                # send notification email (safe-guard)
+                                try:
+                                    if row.get("email"):
+                                        send_email(row.get("email"), "APPROVED – Abia Education Portal",
+                                                   f"Good news!\n\nYour submission for **{row.get('school_name','(Unknown)')}** has been APPROVED and is now live.\n\nThank you!\n— Abia Education Portal Team")
+                                except Exception as e:
+                                    st.warning(f"Approval saved but failed to send email: {e}")
 
-                            # SEND EMAIL
-                            send_email(row['email'], "APPROVED – Abia Education Portal",
-                                f"Good news!\n\nYour submission for **{row['school_name']}** has been APPROVED and is now live.\n\nThank you!\n— Abia Education Portal Team")
-
-                            # LOG THE ACTION
-                            log_admin_action("APPROVED", row['id'], row['school_name'], row['lga_name'])
-
-                            st.success("APPROVED & LIVE!")
-                            st.balloons()
-                            st.rerun()
+                                # Log action and refresh
+                                log_admin_action("APPROVED", sub_id, row.get("school_name",""), row.get("lga_name",""))
+                                st.success("APPROVED & LIVE!")
+                                st.balloons()
+                                st.experimental_rerun()
+                            except Exception as e:
+                                st.error(f"Failed to approve submission: {e}")
 
                     with c2:
-                        if st.button("REJECT", key=f"reject_{row['id']}", type="secondary"):
-                            with engine.begin() as conn:
-                                conn.execute(text("UPDATE school_submissions SET approved=FALSE WHERE id=:id"), {"id": row['id']})
+                        if st.button("REJECT", key=f"reject_{sub_id}", type="secondary", use_container_width=True):
+                            try:
+                                with engine.begin() as conn:
+                                    conn.execute(text("UPDATE school_submissions SET approved=FALSE WHERE id=:id"), {"id": sub_id})
+                                # notify submitter
+                                try:
+                                    if row.get("email"):
+                                        send_email(row.get("email"), "Submission Rejected – Abia Education Portal",
+                                                   f"Hello,\n\nYour submission for **{row.get('school_name','(Unknown)')}** was reviewed but could not be approved.\n\nPlease resubmit with correct details and photo.\n\n— Abia Education Portal Team")
+                                except Exception as e:
+                                    st.warning(f"Rejection recorded but failed to send email: {e}")
 
-                            send_email(row['email'], "Submission Rejected – Abia Education Portal",
-                                f"Hello,\n\nYour submission for **{row['school_name']}** was reviewed but could not be approved.\n\nPlease resubmit with correct details and photo.\n\n— Team")
+                                log_admin_action("REJECTED", sub_id, row.get("school_name",""), row.get("lga_name",""))
+                                st.warning("Rejected")
+                                st.experimental_rerun()
+                            except Exception as e:
+                                st.error(f"Failed to reject submission: {e}")
 
-                            # LOG THE ACTION
-                            log_admin_action("REJECTED", row['id'], row['school_name'], row['lga_name'])
-
-                            st.warning("Rejected")
-                            st.rerun()
-
-    # =============== SHOW ADMIN LOG (ONLY FOR ADMINS) ===============
+    # -------- Admin activity log display (last 50) --------
     st.markdown("---")
     st.markdown("### Admin Activity Log")
-    if os.path.exists("admin_activity_log.csv"):
-        log_df = pd.read_csv("admin_activity_log.csv")
-        log_df = log_df.sort_values("timestamp", ascending=False)
-        st.dataframe(log_df.head(50), use_container_width=True)
-        if st.download_button("Download Full Admin Log", data=log_df.to_csv(index=False), file_name="admin_log_full.csv"):
-            st.success("Log downloaded")
+    logpath = "admin_activity_log.csv"
+    if os.path.exists(logpath):
+        try:
+            log_df = pd.read_csv(logpath)
+            log_df = log_df.sort_values("timestamp", ascending=False).head(50)
+            st.dataframe(log_df, use_container_width=True)
+            # allow download of the full log file if needed
+            try:
+                full_csv = open(logpath, "r", encoding="utf-8").read()
+                if st.download_button("Download Full Admin Log", data=full_csv, file_name="admin_log_full.csv", mime="text/csv"):
+                    st.success("Log downloaded")
+            except Exception:
+                # fallback: offer the head portion
+                if st.download_button("Download Log (recent)", data=log_df.to_csv(index=False), file_name="admin_log_recent.csv"):
+                    st.success("Recent log downloaded")
+        except Exception as e:
+            st.error(f"Failed to read admin log: {e}")
     else:
         st.info("No admin actions logged yet.")
 
