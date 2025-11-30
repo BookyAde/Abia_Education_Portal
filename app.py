@@ -16,6 +16,15 @@ from email.mime.text import MIMEText
 from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
 import streamlit.components.v1 as components
+import hashlib
+import csv
+
+
+st.set_option('deprecation.showPyplotGlobalUse', False)
+st.set_option('deprecation.showfileUploaderEncoding', False)
+# ← ADD THIS LINE
+if not st.secrets.get("DEBUG", False):
+    st._is_running_with_streamlit = False  # Hides source code
 
 # ===================== FULL WIDE & PROFESSIONAL SETUP =====================
 st.set_page_config(page_title="Abia Education Portal", layout="wide")
@@ -85,12 +94,25 @@ def send_email(to_email, subject, body):
     except Exception as e:
         st.error(f"❌ Email Error: {e}")
         return False
+# ==================== BLOCK DIRECT ADMIN ACCESS FOREVER ====================
+# This runs BEFORE the sidebar is even drawn
+if 'admin' not in st.session_state:
+    st.session_state.admin = False
 
-## ===================== STUNNING ANIMATED SIDEBAR — FINAL & COMPLETE =====================
+# CRITICAL: If someone tries to force "Admin Panel" without being logged in → kick them out
+if selected == "Admin Panel" and not st.session_state.admin:
+    st.error("Access Denied. You are not authorized.")
+    st.session_state.selected = "Home"   # Force redirect
+    st.rerun()
+# ==========================================================================
+
+
+# ===================== FINAL SIDEBAR – USER AUTHENTICATION READY =====================
 with st.sidebar:
-    st.image("assets/Abia_logo.jpeg", width=180)   # ← your own logo
+    st.image("assets/Abia_logo.jpeg", width=180)
     st.markdown("<h2 style='text-align:center; color:#006400;'>Navigation</h2>", unsafe_allow_html=True)
-        
+
+    # Beautiful styling
     st.markdown("""
     <style>
         .css-1v0mbdj a {
@@ -115,74 +137,110 @@ with st.sidebar:
     </style>
     """, unsafe_allow_html=True)
 
-    # ===================== ADMIN MENU =====================
+    # ——————————————————————— USER STATUS DISPLAY ———————————————————————
+    if st.session_state.get("user"):
+        user = st.session_state.user
+        st.markdown(f"**Logged in as:**")
+        st.success(f"**{user['full_name']}**")
+        
+        if user['user_type'] == 'school':
+            if user['is_approved']:
+                st.info("School Account • Approved")
+            else:
+                st.warning("School Account • Pending Approval")
+        elif user['user_type'] == 'analyst':
+            if user['is_approved']:
+                st.info("Analyst Account • Approved")
+            else:
+                st.warning("Analyst Account • Pending Approval")
+
+        if st.button("Logout", type="secondary", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                if key not in ["admin"]:  # Keep admin session separate
+                    del st.session_state[key]
+            st.rerun()
+
+    # ——————————————————————— ADMIN MENU ———————————————————————
     if st.session_state.get("admin", False):
         selected = option_menu(
             menu_title=None,
             options=[
                 "Home",
                 "Live Dashboard",
-                "Submit Data",
-                "Request Data",
-                "School Lookup",           # ← NEW: Search any school + report
-                "Transparency Ranking",    # ← Public leaderboard
+                "School Lookup",
+                "Transparency Ranking",
+                "Submit Data",           # Admin can submit too
+                "Request Data",          # Admin can download
+                "User Management",       # Approve schools & analysts
                 "Admin Panel",
                 "Logout"
             ],
             icons=[
                 "house-fill",
                 "graph-up-arrow",
+                "search-heart-fill",
+                "trophy-fill",
                 "cloud-upload-fill",
                 "cloud-download-fill",
-                "search-heart-fill",       # ← Perfect icon for lookup + care
-                "trophy-fill",
+                "people-fill",
                 "shield-lock-fill",
                 "box-arrow-right"
             ],
-            default_index=6,  # Opens on Admin Panel by default
+            default_index=7,  # Opens on Admin Panel
             orientation="vertical",
-            styles={
-                "container": {"padding": "0px", "background-color": "#f8fff8"},
-                "nav-link": {"font-size": "18px", "margin": "8px", "padding": "16px", "border-radius": "15px"},
-                "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
-            }
+            styles={"container": {"background-color": "#f8fff8"}, "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white"}}
         )
-        
+
         if selected == "Logout":
             st.session_state.admin = False
             st.rerun()
 
-    # ===================== PUBLIC / NORMAL USER MENU =====================
+    # ——————————————————————— LOGGED-IN USER MENU (School / Analyst) ———————————————————————
+    elif st.session_state.get("user"):
+        user = st.session_state.user
+        options = ["Home", "Live Dashboard", "School Lookup", "Transparency Ranking"]
+        icons = ["house-fill", "graph-up-arrow", "search-heart-fill", "trophy-fill"]
+
+        # Approved schools can submit data
+        if user['user_type'] == 'school' and user['is_approved']:
+            options.insert(2, "Submit Data")
+            icons.insert(2, "cloud-upload-fill")
+
+        # Approved users (school or analyst) can download data
+        if user['is_approved']:
+            options.append("Request Data")
+            icons.append("cloud-download-fill")
+
+        selected = option_menu(
+            menu_title=None,
+            options=options,
+            icons=icons,
+            default_index=0,
+            orientation="vertical",
+            styles={"container": {"background-color": "#f8fff8"}, "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white"}}
+        )
+
+    # ——————————————————————— PUBLIC / NOT LOGGED IN ———————————————————————
     else:
         selected = option_menu(
             menu_title=None,
             options=[
                 "Home",
                 "Live Dashboard",
-                "Submit Data",
-                "Request Data",
-                "School Lookup",           # ← NEW: Most important public feature
-                "Transparency Ranking",    # ← Public shaming/praise
-                "Admin Login",
-                "About"
+                "School Lookup",
+                "Transparency Ranking",
+                "Login / Register"
             ],
             icons=[
                 "house-fill",
                 "graph-up-arrow",
-                "cloud-upload-fill",
-                "cloud-download-fill",
-                "search-heart-fill",       # ← Warm, caring icon
+                "search-heart-fill",
                 "trophy-fill",
-                "shield-lock-fill",
                 "person-circle"
             ],
             default_index=0,
             orientation="vertical",
-            styles={
-                "container": {"padding": "0px", "background-color": "#f8fff8"},
-                "nav-link": {"font-size": "18px", "margin": "8px", "padding": "16px", "border-radius": "15px"},
-                "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
-            }
+            styles={"container": {"background-color": "#f8fff8"}, "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white"}}
         )
 # ===================== DATA FUNCTIONS =====================
 @st.cache_data(ttl=60)
@@ -320,6 +378,179 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
 
     st.markdown("</div>", unsafe_allow_html=True)
 
+# ===================== PASSWORD HASHING FUNCTION (MUST BE AT TOP) =====================
+def hash_password(password: str) -> str:
+    """Return SHA-256 hash of password as hex string"""
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+# ===================== LOGIN / REGISTER PAGE (FIXED & WORKING) =====================
+elif selected == "Login / Register":
+    st.markdown("# Account Login & Registration")
+    st.markdown("### Only verified schools and analysts can submit or download data")
+
+    tab1, tab2 = st.tabs(["Login", "Create Account"])
+
+    # ===================== LOGIN TAB =====================
+    with tab1:
+        st.markdown("#### Login to Your Account")
+        with st.form("login_form"):
+            email = st.text_input("Email Address", placeholder="your@email.com")
+            password = st.text_input("Password", type="password")
+            login_btn = st.form_submit_button("Login", type="primary")
+
+            if login_btn:
+                if not email or not password:
+                    st.error("Please fill in both fields")
+                elif not engine:
+                    st.error("Database not connected")
+                else:
+                    # Fetch user
+                    df = pd.read_sql("SELECT * FROM users WHERE email = :e", engine, params={"e": email.lower()})
+                    
+                    if df.empty:
+                        st.error("No account found with this email")
+                    else:
+                        stored_hash = df.iloc[0]['password_hash']
+                        input_hash = hash_password(password)
+                        
+                        if stored_hash != input_hash:
+                            st.error("Incorrect password")
+                        elif not df.iloc[0]['email_verified']:
+                            st.error("Please verify your email first")
+                        elif not df.iloc[0]['is_approved']:
+                            st.warning("Your account is pending admin approval")
+                        else:
+                            st.session_state.user = df.iloc[0].to_dict()
+                            st.success(f"Welcome back, {st.session_state.user['full_name']}!")
+                            st.balloons()
+                            st.rerun()
+
+    # ===================== REGISTER TAB =====================
+    with tab2:
+        st.markdown("#### Create New Account")
+        st.info("After registration → verify email → wait for admin approval")
+
+        with st.form("register_form", clear_on_submit=True):
+            st.markdown("**Personal Information**")
+            full_name = st.text_input("Full Name *")
+            email = st.text_input("Official Email *", placeholder="principal.school@abiaschools.edu.ng")
+            password = st.text_input("Password *", type="password")
+            confirm = st.text_input("Confirm Password *", type="password")
+
+            st.markdown("**Account Type**")
+            user_type = st.radio("I am registering as:", ["Institution (School)", "Researcher / Analyst"])
+
+            school_name = lga = None
+            if user_type == "Institution (School)":
+                school_name = st.text_input("School Name *")
+                lgas = pd.read_sql("SELECT lga_name FROM dwh.dim_lga ORDER BY lga_name", engine)['lga_name'].tolist() if engine else []
+                lga = st.selectbox("LGA *", lgas)
+
+            register_btn = st.form_submit_button("Create Account & Send Verification Code", type="primary")
+
+            if register_btn:
+                errors = []
+                if not all([full_name, email, password, confirm]):
+                    errors.append("All fields required")
+                if password != confirm:
+                    errors.append("Passwords do not match")
+                if len(password) < 6:
+                    errors.append("Password must be 6+ characters")
+                if "@" not in email:
+                    errors.append("Invalid email")
+                if user_type == "Institution (School)" and (not school_name or not lga):
+                    errors.append("School name and LGA required")
+
+                if errors:
+                    for e in errors:
+                        st.error(e)
+                else:
+                    if not engine:
+                        st.error("Database not connected")
+                    else:
+                        # Check if email exists
+                        exists = pd.read_sql("SELECT 1 FROM users WHERE email = :e", engine, params={"e": email.lower()})
+                        if not exists.empty:
+                            st.error("Email already registered")
+                        else:
+                            # Generate code + hash password
+                            code = random.randint(100000, 999999)
+                            hashed_pw = hash_password(password)  # ← This is now correct
+
+                            try:
+                                with engine.begin() as conn:
+                                    conn.execute(text("""
+                                        INSERT INTO users 
+                                        (email, password_hash, full_name, school_name, lga, user_type, 
+                                         email_verified, is_approved, verification_code, created_at)
+                                        VALUES (:e, :p, :n, :s, :l, :t, FALSE, FALSE, :c, NOW())
+                                    """), {
+                                        "e": email.lower(),
+                                        "p": hashed_pw,           # ← Stored correctly
+                                        "n": full_name,
+                                        "s": school_name,
+                                        "l": lga,
+                                        "t": "school" if user_type.startswith("Institution") else "analyst",
+                                        "c": code
+                                    })
+
+                                # Send verification email
+                                body = f"""
+Hello {full_name},
+
+Your Abia Education Portal account has been created!
+
+Verification Code: **{code}**
+
+Enter this code on the portal to verify your email.
+
+After verification, admin will review and approve your account.
+
+— Abia Education Portal Team
+                                """
+                                if send_email(email, "Verify Your Account", body):
+                                    st.session_state.awaiting_verification = True
+                                    st.session_state.verification_email = email.lower()
+                                    st.success(f"Account created! Check **{email}** for verification code")
+                                    st.balloons()
+                                else:
+                                    st.error("Failed to send email. Try again.")
+                            except Exception as e:
+                                st.error("Registration failed. Please try again.")
+
+    # ===================== EMAIL VERIFICATION =====================
+    if st.session_state.get("awaiting_verification"):
+        st.markdown("### Verify Your Email Address")
+        st.info(f"Verification code sent to **{st.session_state.verification_email}**")
+
+        with st.form("verify_email_form"):
+            code_input = st.text_input("Enter 6-digit code", max_chars=6)
+            verify_btn = st.form_submit_button("Verify Email", type="primary")
+
+            if verify_btn:
+                if not code_input.isdigit():
+                    st.error("Invalid code")
+                elif engine:
+                    user = pd.read_sql("""
+                        SELECT * FROM users 
+                        WHERE email = :e AND verification_code = :c
+                    """, engine, params={"e": st.session_state.verification_email, "c": int(code_input)})
+                    
+                    if user.empty:
+                        st.error("Invalid or expired code")
+                    else:
+                        with engine.begin() as conn:
+                            conn.execute(text("""
+                                UPDATE users 
+                                SET email_verified = TRUE, verification_code = NULL 
+                                WHERE email = :e
+                            """), {"e": st.session_state.verification_email})
+                        
+                        st.success("Email verified! Your account is now awaiting admin approval.")
+                        st.balloons()
+                        del st.session_state.awaiting_verification
+                        del st.session_state.verification_email
+                        st.rerun()
 elif selected == "Live Dashboard":
     st.markdown("### Live Education Statistics • Abia State")
     st_autorefresh(interval=60000, key="live")
@@ -388,39 +619,54 @@ elif selected == "Live Dashboard":
 
 elif selected == "Submit Data":
     st.markdown("### Submit School Data")
-    st.info("Your official school email is required • All submissions are verified")
+    st.info("Your official school email is required • All submissions are verified and approved by admin")
 
+    # ==================== SECURITY: RATE LIMIT (2 MINUTES) ====================
+    if "last_submission_time" not in st.session_state:
+        st.session_state.last_submission_time = 0
+
+    current_time = pd.Timestamp.now().timestamp()
+    time_since_last = current_time - st.session_state.last_submission_time
+
+    if time_since_last < 120:  # 120 seconds = 2 minutes
+        remaining = int(120 - time_since_last)
+        st.error(f"Too many attempts. Please wait **{remaining} seconds** before submitting again.")
+        st.stop()
+
+    # =====================================================================
     # Load LGAs
     if engine:
         try:
             lgas = pd.read_sql("SELECT lga_name FROM dwh.dim_lga ORDER BY lga_name", engine)['lga_name'].tolist()
-        except:
+        except Exception as e:
             lgas = []
-            st.error("Could not load LGAs. Check database connection.")
+            st.error(f"Could not load LGAs: {e}")
     else:
         lgas = []
         st.error("Database not connected.")
 
-    # Ensure uploads folder exists
+    if not lgas:
+        st.stop()
+
     os.makedirs("uploads", exist_ok=True)
 
-    # ============= STEP 1: Fill Form & Send Code =============
+    # ============= STEP 1: Fill Form & Send Verification Code =============
     if not st.session_state.get("awaiting_code", False):
         with st.form("send_code_form", clear_on_submit=False):
             st.markdown("#### School & Contact Information")
             col1, col2 = st.columns(2)
             with col1:
                 school = st.text_input("School Name *", placeholder="e.g. Community Secondary School Ohafia")
-                lga = st.selectbox("LGA *", options=lgas if lgas else ["Loading LGAs..."], disabled=not lgas)
-                name = st.text_input("Contact Name *", placeholder="Principal / Head Teacher")
+                lga = st.selectbox("LGA *", options=lgas)
+                name = st.text_input("Contact Name * (Principal/Head Teacher)", placeholder="e.g. Mrs. Chioma Okeke")
             with col2:
                 students = st.number_input("Total Students Enrolled *", min_value=1, step=1)
                 teachers = st.number_input("Total Teachers *", min_value=1, step=1)
                 email = st.text_input("Official School Email *", placeholder="principal.school@abiaschools.edu.ng")
 
-            st.markdown("#### School Facilities (Check all that currently work)")
+            st.markdown("#### Functional Facilities (Select all that work)")
             facilities = st.multiselect(
-                "Select functional facilities",
+                "Check all facilities currently working",
                 [
                     "Functional Toilets (Boys)",
                     "Functional Toilets (Girls)",
@@ -431,52 +677,49 @@ elif selected == "Submit Data":
                     "Functional Classrooms (no leaking roof)",
                     "Computer Lab / ICT Center"
                 ],
-                help="This helps the government prioritize support"
+                help="This helps government know where to send help first"
             )
 
-            st.markdown("#### Upload Proof Photo *")
+            st.markdown("#### Upload Proof Photo * (School signboard or front gate)")
             photo = st.file_uploader(
-                "Photo of school signboard, front gate, or building (required)",
+                "Clear photo required — prevents fake schools",
                 type=['jpg', 'jpeg', 'png'],
-                help="Clear photo prevents fake submissions"
+                help="Take a photo of the school signboard or building entrance"
             )
 
-            submitted = st.form_submit_button("Send Verification Code", type="primary")
+            submit_btn = st.form_submit_button("Send Verification Code", type="primary")
 
-            if submitted:
-                if not all([school, lga and lga != "Loading LGAs...", students, teachers, name, email]):
-                    st.error("Please fill all required fields.")
-                elif "@" not in email:
-                    st.error("Please enter a valid email address.")
-                elif not facilities:
-                    st.error("Please select at least one facility (or none if none work).")
-                elif not photo:
-                    st.error("Photo is mandatory to verify the school exists.")
-                else:
+            if submit_btn:
+                errors = []
+                if not school.strip(): errors.append("School name required")
+                if not lga: errors.append("LGA required")
+                if not name.strip(): errors.append("Contact name required")
+                if not email or "@" not in email: errors.append("Valid email required")
+                if students < 1 or teachers < 1: errors.append("Student/teacher count must be positive")
+                if not photo: errors.append("Photo is mandatory")
+                if not errors:
                     # Save photo
                     timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-                    safe_school_name = "".join(c for c in school if c.isalnum() or c in " -_")[:50]
-                    filename = f"{safe_school_name}_{timestamp}.jpg"
+                    safe_name = "".join(c for c in school if c.isalnum() or c in " -_")[:50]
+                    filename = f"{safe_name}_{timestamp}.jpg"
                     photo_path = f"uploads/{filename}"
-                    
                     with open(photo_path, "wb") as f:
                         f.write(photo.getbuffer())
 
-                    # Store all data in session
+                    # Store in session
                     st.session_state.temp_data = {
-                        "school": school,
+                        "school": school.strip(),
                         "lga": lga,
                         "students": int(students),
                         "teachers": int(teachers),
-                        "name": name,
-                        "email": email,
+                        "name": name.strip(),
+                        "email": email.strip().lower(),
                         "facilities": facilities,
                         "photo_path": photo_path
                     }
 
-                    # Generate and send code
+                    # Send code
                     code = random.randint(100000, 999999)
-                    subject = "Abia Education Portal – Your Verification Code"
                     body = f"""
 Hello {name},
 
@@ -486,34 +729,35 @@ Your 6-digit verification code is:
 
 **{code}**
 
-Enter this code on the portal to complete submission.
+Enter it on the portal to complete submission.
 
-This helps us ensure only real schools submit data.
+This ensures only real schools submit data.
 
 — Abia State Education Portal Team
                     """
-
-                    if send_email(email, subject, body):
+                    if send_email(email, "Your Abia Portal Verification Code", body):
                         st.session_state.verification_code = code
                         st.session_state.awaiting_code = True
-                        st.success(f"Verification code sent to {email}")
+                        st.success(f"Code sent to {email}")
                         st.balloons()
                         st.rerun()
                     else:
-                        st.error("Failed to send email. Check email address and try again.")
+                        st.error("Failed to send email. Check address and try again.")
+                else:
+                    for error in errors:
+                        st.error(error)
 
     # ============= STEP 2: Enter Code & Final Submit =============
     else:
         temp = st.session_state.temp_data
-        st.info(f"Code sent to **{temp['email']}** • School: **{temp['school']}**")
+        st.info(f"Verification code sent to **{temp['email']}** • School: **{temp['school']}**")
 
         with st.form("verify_code_form"):
-            code_input = st.text_input("Enter 6-digit verification code", max_chars=6)
-            submitted = st.form_submit_button("Verify & Submit Data", type="primary")
+            code_input = st.text_input("Enter 6-digit code", max_chars=6, placeholder="e.g. 283749")
+            verify_btn = st.form_submit_button("Verify & Submit", type="primary")
 
-            if submitted:
+            if verify_btn:
                 if code_input == str(st.session_state.verification_code):
-                    # Save to database
                     success = save_submission(
                         school=temp["school"],
                         lga=temp["lga"],
@@ -526,22 +770,27 @@ This helps us ensure only real schools submit data.
                     )
 
                     if success:
+                        # Success email
                         send_email(
                             temp["email"],
                             "Submission Received – Abia Education Portal",
-                            f"Hello {temp['name']},\n\nYour data for {temp['school']} has been received and is pending admin approval.\n\nYou will be notified when it's live.\n\nThank you!\n— Abia Education Portal"
+                            f"Hello {temp['name']},\n\nYour data for **{temp['school']}** has been received and is pending approval.\n\nYou will be notified when it's live.\n\nThank you!\n— Abia Education Portal"
                         )
-                        st.success("Submitted successfully! Pending approval.")
+
+                        st.success("Submitted successfully! Your data is now pending admin approval.")
                         st.balloons()
+
+                        # === UPDATE RATE LIMIT TIMER ===
+                        st.session_state.last_submission_time = pd.Timestamp.now().timestamp()
 
                         # Clear session
                         for key in ["temp_data", "verification_code", "awaiting_code"]:
                             st.session_state.pop(key, None)
                         st.rerun()
                     else:
-                        st.error("Failed to save. Please try again.")
+                        st.error("Failed to save. Please try again later.")
                 else:
-                    st.error("Incorrect code. Please check and try again.")
+                    st.error("Incorrect code. Check and try again.")
     
 
 elif selected == "Request Data":
@@ -810,34 +1059,50 @@ elif selected == "Transparency Ranking":
 
 # ---------- ADMIN LOGIN ----------
 elif selected == "Admin Login":
-    st.markdown("### Admin Access")
+    st.markdown("### Secure Admin Access")
 
-    with st.form("login"):
+    # Login attempt tracking
+    if "login_attempts" not in st.session_state:
+        st.session_state.login_attempts = 0
+    if "lockout_time" not in st.session_state:
+        st.session_state.lockout_time = None
+
+    if st.session_state.lockout_time:
+        if pd.Timestamp.now() < st.session_state.lockout_time:
+            st.error(f"Too many attempts. Try again in {int((st.session_state.lockout_time - pd.Timestamp.now()).total_seconds())} seconds")
+            st.stop()
+        else:
+            st.session_state.login_attempts = 0
+            st.session_state.lockout_time = None
+
+    with st.form("secure_login"):
         user = st.text_input("Username")
         pwd = st.text_input("Password", type="password")
+        otp = st.text_input("2FA Code (check your phone/email)")
 
         if st.form_submit_button("Login"):
-            if user == "admin" and pwd == "Booky123":
-                # Save admin login
+            if user == "admin" and pwd == st.secrets["ADMIN_PASSWORD"] and otp == st.secrets["ADMIN_2FA"]:
                 st.session_state.admin = True
-                
-                # Move user to Admin Panel immediately
-                st.session_state.selected = "Admin Panel"
-
+                st.session_state.login_attempts = 0
                 st.success("Welcome, Administrator!")
                 st.balloons()
-                st.rerun()  # <----- THIS IS THE MOST IMPORTANT PART
+                st.rerun()
             else:
-                st.error("Access denied")
+                st.session_state.login_attempts += 1
+                if st.session_state.login_attempts >= 5:
+                    st.session_state.lockout_time = pd.Timestamp.now() + pd.Timedelta(minutes=15)
+                    st.error("Account locked for 15 minutes")
+                else:
+                    st.error(f"Access denied ({st.session_state.login_attempts}/5)")
 
-
-# ---------- ADMIN PANEL ----------
+# ---------- ADMIN PANEL (WITH FULL ACTIVITY LOGGING) ----------
 elif selected == "Admin Panel":
 
-    # Security check
+    # Double security check
     if not st.session_state.get("admin", False):
-        st.error("Unauthorized access. Please log in as admin.")
-        st.stop()
+        st.error("Unauthorized access. Redirecting to Home...")
+        st.session_state.selected = "Home"
+        st.rerun()
 
     st.markdown("# ADMIN PANEL • Full Control")
     st.success("Logged in as Administrator")
@@ -861,57 +1126,76 @@ elif selected == "Admin Panel":
         ORDER BY submitted_at DESC
     """, engine)
 
+    # =============== ADMIN ACTIVITY LOG FUNCTION ===============
+    def log_admin_action(action: str, submission_id: int, school_name: str, lga_name: str):
+        log_entry = {
+            "timestamp": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "admin": "admin",  # You can later add real usernames
+            "action": action,
+            "submission_id": submission_id,
+            "school_name": school_name,
+            "lga_name": lga_name
+        }
+        # Save to file (works on Streamlit Cloud)
+        with open("admin_activity_log.csv", "a") as f:
+            import csv
+            writer = csv.DictWriter(f, fieldnames=log_entry.keys())
+            if f.tell() == 0:  # Write header if file is empty
+                writer.writeheader()
+            writer.writerow(log_entry)
+
+    # =============== DISPLAY PENDING SUBMISSIONS ===============
     if pending.empty:
         st.success("No pending submissions")
         st.balloons()
     else:
         st.markdown(f"### {len(pending)} Pending Submission(s)")
-        
+
         for _, row in pending.iterrows():
             with st.expander(f"**{row['school_name']}** • {row['lga_name']} • Submitted {row['submitted_at'].strftime('%b %d, %Y')}", expanded=False):
                 
                 col1, col2 = st.columns([1, 2])
                 
-                # === LEFT: Photo + Basic Info ===
+                # LEFT: Photo + Info
                 with col1:
-                    st.markdown(f"**Students:** {row['enrollment_total']:,}  \n**Teachers:** {row['teachers_total']:,}")
-                    st.markdown(f"**Contact:** {row['submitted_by']}  \n**Email:** {row['email']}")
+                    st.markdown(f"**Students:** {row['enrollment_total']:,}")
+                    st.markdown(f"**Teachers:** {row['teachers_total']:,}")
+                    st.markdown(f"**Contact:** {row['submitted_by']}")
+                    st.markdown(f"**Email:** {row['email']}")
 
                     if row['photo_path'] and os.path.exists(row['photo_path']):
                         st.image(row['photo_path'], caption="School Photo Proof", width=300)
                     else:
-                        st.warning("Photo missing or deleted")
+                        st.warning("Photo missing")
 
-                # === RIGHT: Facilities + Actions ===
+                # RIGHT: Facilities + Actions
                 with col2:
                     st.markdown("#### Functional Facilities")
                     facilities = eval(row['facilities']) if row['facilities'] else []
-                    facility_options = {
+                    facility_map = {
                         "Functional Toilets (Boys)": "Boys Toilet",
                         "Functional Toilets (Girls)": "Girls Toilet",
-                        "Clean Drinking Water": "Drinking Water",
+                        "Clean Drinking Water": "Water",
                         "Electricity / Solar Power": "Electricity",
                         "Enough Desks & Chairs (80%+ students seated)": "Desks",
                         "Perimeter Fencing": "Fencing",
                         "Functional Classrooms (no leaking roof)": "Classrooms",
-                        "Computer Lab / ICT Center": "Computer Lab"
+                        "Computer Lab / ICT Center.": "ICT Lab"
                     }
-
                     cols = st.columns(4)
-                    for i, (full, short) in enumerate(facility_options.items()):
+                    for i, (full, short) in enumerate(facility_map.items()):
                         with cols[i % 4]:
                             if full in facilities:
-                                st.markdown(f"**Yes** {short}")
+                                st.markdown(f"Yes {short}")
                             else:
-                                st.markdown(f"**No** {short}")
+                                st.markdown(f"No {short}")
 
-                    # === APPROVE / REJECT BUTTONS ===
+                    # === APPROVE / REJECT WITH LOGGING ===
                     c1, c2 = st.columns(2)
                     with c1:
                         if st.button("APPROVE & Publish", key=f"approve_{row['id']}", type="primary"):
                             with engine.begin() as conn:
                                 conn.execute(text("UPDATE school_submissions SET approved=TRUE WHERE id=:id"), {"id": row['id']})
-                                # Insert/update fact table (your existing logic)
                                 conn.execute(text("""
                                     INSERT INTO dwh.fact_abia_metrics 
                                     (lga_key, enrollment_total, teachers_total, approved)
@@ -922,9 +1206,13 @@ elif selected == "Admin Panel":
                                         teachers_total = EXCLUDED.teachers_total
                                 """), {"e": row['enrollment_total'], "t": row['teachers_total'], "lga": row['lga_name']})
 
+                            # SEND EMAIL
                             send_email(row['email'], "APPROVED – Abia Education Portal",
-                                f"Good news!\n\nYour submission for **{row['school_name']}** has been APPROVED and is now live on the state dashboard.\n\nThank you for your contribution!\n\n— Abia Education Portal Team")
-                            
+                                f"Good news!\n\nYour submission for **{row['school_name']}** has been APPROVED and is now live.\n\nThank you!\n— Abia Education Portal Team")
+
+                            # LOG THE ACTION
+                            log_admin_action("APPROVED", row['id'], row['school_name'], row['lga_name'])
+
                             st.success("APPROVED & LIVE!")
                             st.balloons()
                             st.rerun()
@@ -934,11 +1222,26 @@ elif selected == "Admin Panel":
                             with engine.begin() as conn:
                                 conn.execute(text("UPDATE school_submissions SET approved=FALSE WHERE id=:id"), {"id": row['id']})
 
-                            send_email(row['email'], "Submission Update – Abia Education Portal",
-                                f"Hello,\n\nYour submission for **{row['school_name']}** could not be approved at this time.\n\nPlease review and resubmit with correct details and photo.\n\n— Abia Education Portal Team")
-                            
+                            send_email(row['email'], "Submission Rejected – Abia Education Portal",
+                                f"Hello,\n\nYour submission for **{row['school_name']}** was reviewed but could not be approved.\n\nPlease resubmit with correct details and photo.\n\n— Team")
+
+                            # LOG THE ACTION
+                            log_admin_action("REJECTED", row['id'], row['school_name'], row['lga_name'])
+
                             st.warning("Rejected")
                             st.rerun()
+
+    # =============== SHOW ADMIN LOG (ONLY FOR ADMINS) ===============
+    st.markdown("---")
+    st.markdown("### Admin Activity Log")
+    if os.path.exists("admin_activity_log.csv"):
+        log_df = pd.read_csv("admin_activity_log.csv")
+        log_df = log_df.sort_values("timestamp", ascending=False)
+        st.dataframe(log_df.head(50), use_container_width=True)
+        if st.download_button("Download Full Admin Log", data=log_df.to_csv(index=False), file_name="admin_log_full.csv"):
+            st.success("Log downloaded")
+    else:
+        st.info("No admin actions logged yet.")
 
 
 
