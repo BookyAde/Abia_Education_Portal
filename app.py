@@ -17,7 +17,11 @@ from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
 import streamlit.components.v1 as components
 import hashlib
+import json
+import ast
 import csv
+from datetime import datetime
+
 
 
 # ===================== PASSWORD HASHING FUNCTION (MUST BE AT TOP) =====================
@@ -1242,11 +1246,6 @@ elif selected == "Admin Login":
                     st.error(f"Access denied ({st.session_state.login_attempts}/5)")
 
 # ===================== ADMIN PANEL (SECURE + FULL ACTIVITY LOGGING) =====================
-import json
-import ast
-import os
-import csv
-from datetime import datetime
 
 elif selected == "Admin Panel":
 
