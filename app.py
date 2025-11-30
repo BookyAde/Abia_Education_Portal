@@ -384,91 +384,72 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ===================== LOGIN / REGISTER + CODE INPUT (100% WORKING) =====================
+# ===================== FINAL LOGIN / REGISTER – NO FAKE ACCOUNTS EVER =====================
 elif selected == "Login / Register":
     st.markdown("# Account Login & Registration")
-    st.markdown("### Secure access for schools and analysts")
+    st.markdown("### Only verified emails become real accounts")
 
     tab_login, tab_register = st.tabs(["Login", "Create Account"])
 
     # ============================================================
-    # RESEND CODE COOLDOWN
-    # ============================================================
-    if "resend_cooldown" not in st.session_state:
-        st.session_state.resend_cooldown = 0
-
-    # ============================================================
-    # LOGIN + RESEND CODE
+    # LOGIN
     # ============================================================
     with tab_login:
-        st.markdown("#### Login to Your Account")
-
+        st.markdown("#### Login")
         with st.form("login_form"):
-            email = st.text_input("Email Address", placeholder="you@abiaschools.edu.ng").strip().lower()
+            email = st.text_input("Email").strip().lower()
             password = st.text_input("Password", type="password")
             col1, col2 = st.columns(2)
             with col1:
-                login_btn = st.form_submit_button("Login", type="primary")
+                login = st.form_submit_button("Login", type="primary")
             with col2:
-                resend_btn = st.form_submit_button("Resend Code", type="secondary")
+                resend = st.form_submit_button("Resend Code")
 
-            if login_btn:
-                if not email or not password:
-                    st.error("Fill both fields")
+            if login or resend:
+                if not email:
+                    st.error("Enter email")
                 elif not engine:
-                    st.error("Database error")
+                    st.error("DB error")
                 else:
-                    df = pd.read_sql(text("SELECT * FROM users WHERE email = :e"), engine, params={"e": email})
-                    if df.empty:
-                        st.error("No account found")
-                    else:
-                        user = df.iloc[0]
-                        if hash_password(password) != user["password_hash"]:
+                    # Check real users table
+                    user = pd.read_sql(text("SELECT * FROM users WHERE email = :e"), engine, params={"e": email})
+                    
+                    if login:
+                        if user.empty:
+                            st.error("No account found")
+                        elif hash_password(password) != user.iloc[0]["password_hash"]:
                             st.error("Wrong password")
-                        elif not user["email_verified"]:
-                            st.warning("Email not verified. Use 'Resend Code'")
-                            st.session_state.pending_email = email  # ← Remember email
-                        elif not user["is_approved"]:
-                            st.warning("Pending admin approval")
+                        elif not user.iloc[0]["email_verified"]:
+                            st.warning("Email not verified")
+                        elif not user.iloc[0]["is_approved"]:
+                            st.warning("Pending approval")
                         else:
-                            st.session_state.user = user.to_dict()
-                            st.success(f"Welcome back, {user['full_name']}!")
+                            st.session_state.user = user.iloc[0].to_dict()
+                            st.success("Logged in!")
                             st.balloons()
                             st.rerun()
 
-            if resend_btn:
-                if pd.Timestamp.now().timestamp() - st.session_state.resend_cooldown < 60:
-                    st.error(f"Wait {int(60 - (pd.Timestamp.now().timestamp() - st.session_state.resend_cooldown))}s")
-                elif not email:
-                    st.error("Enter your email first")
-                else:
-                    df = pd.read_sql(text("SELECT * FROM users WHERE email = :e"), engine, params={"e": email})
-                    if df.empty:
-                        st.error("No account found")
-                    elif df.iloc[0]["email_verified"]:
-                        st.info("Email already verified")
-                    else:
-                        new_code = random.randint(100000, 999999)
-                        try:
+                    if resend:
+                        # Check if in pending
+                        pending = pd.read_sql(text("SELECT * FROM pending_users WHERE email = :e"), engine, params={"e": email})
+                        if not pending.empty and pending.iloc[0]["expires_at"] > pd.Timestamp.now():
+                            new_code = random.randint(100000, 999999)
                             with engine.begin() as conn:
-                                conn.execute(
-                                    text("UPDATE users SET verification_code = :c WHERE email = :e"),
-                                    {"c": new_code, "e": email}
-                                )
+                                conn.execute(text("UPDATE pending_users SET verification_code = :c WHERE email = :e"),
+                                           {"c": new_code, "e": email})
                             body = f"New code: {new_code}"
                             if send_email(email, "New Verification Code", body):
-                                st.session_state.pending_email = email
-                                st.session_state.resend_cooldown = pd.Timestamp.now().timestamp()
                                 st.success("New code sent!")
-                                st.balloons()
-                        except:
-                            st.error("Failed")
+                            else:
+                                st.error("Email failed")
+                        else:
+                            st.info("No pending registration found")
 
     # ============================================================
-    # REGISTER
+    # REGISTER → PENDING TABLE ONLY
     # ============================================================
     with tab_register:
-        st.markdown("#### Create New Account")
+        st.markdown("#### Create Account")
         with st.form("register_form", clear_on_submit=True):
             full_name = st.text_input("Full Name *")
             email = st.text_input("Email *").strip().lower()
@@ -476,63 +457,103 @@ elif selected == "Login / Register":
             confirm = st.text_input("Confirm Password *", type="password")
             user_type = st.selectbox("Account Type *", ["school", "analyst"])
 
-            submitted = st.form_submit_button("Create Account", type="primary")
+            submit = st.form_submit_button("Create Account", type="primary")
 
-            if submitted:
-                # ... your validation ...
-                if errors: 
-                    for e in errors: st.error(e)
+            if submit:
+                if not all([full_name, email, password, confirm]):
+                    st.error("Fill all fields")
+                elif password != confirm:
+                    st.error("Passwords don't match")
+                elif len(password) < 6:
+                    st.error("Password too short")
+                elif "@" not in email:
+                    st.error("Invalid email")
                 else:
-                    code = random.randint(100000, 999999)
-                    hashed = hash_password(password)
-                    try:
-                        with engine.begin() as conn:
-                            conn.execute(text("""
-                                INSERT INTO users (email, password_hash, full_name, user_type, verification_code, email_verified, is_approved, created_at)
-                                VALUES (:e, :p, :n, :t, :c, FALSE, FALSE, NOW())
-                            """), {"e": email, "p": hashed, "n": full_name, "t": user_type, "c": code})
+                    # Check if already exists (real or pending)
+                    real = pd.read_sql(text("SELECT 1 FROM users WHERE email = :e"), engine, params={"e": email})
+                    pending = pd.read_sql(text("SELECT 1 FROM pending_users WHERE email = :e"), engine, params={"e": email})
+                    
+                    if not real.empty:
+                        st.error("Account already exists and verified")
+                    elif not pending.empty:
+                        st.info("You already started registration. Check your email for code.")
+                    else:
+                        code = random.randint(100000, 999999)
+                        hashed = hash_password(password)
+                        try:
+                            with engine.begin() as conn:
+                                conn.execute(text("""
+                                    INSERT INTO pending_users 
+                                    (email, password_hash, full_name, user_type, verification_code)
+                                    VALUES (:e, :p, :n, :t, :c)
+                                """), {"e": email, "p": hashed, "n": full_name, "t": user_type, "c": code})
 
-                        body = f"Your verification code: {code}"
-                        if send_email(email, "Your Code", body):
-                            st.session_state.pending_email = email
-                            st.success("Account created! Check your email")
-                            st.balloons()
-                    except Exception as e:
-                        st.error("Failed")
+                            body = f"""
+Hello {full_name},
+
+Your verification code:
+
+    {code}
+
+Enter it on the portal to complete registration.
+
+Code expires in 24 hours.
+
+— Abia Education Portal
+                            """
+                            if send_email(email, "Complete Your Registration", body):
+                                st.success("Check your email for verification code!")
+                                st.balloons()
+                            else:
+                                st.error("Email failed — contact admin")
+                        except:
+                            st.error("Failed")
 
     # ============================================================
-    # CODE INPUT BOX — ALWAYS SHOWS IF NEEDED
+    # CODE VERIFICATION — MOVES FROM PENDING → REAL USERS
     # ============================================================
     if st.session_state.get("pending_email"):
         st.markdown("### Verify Your Email")
         st.info(f"Code sent to **{st.session_state.pending_email}**")
 
         with st.form("verify_form"):
-            code = st.text_input("Enter 6-digit code", max_chars=6)
-            verify = st.form_submit_button("Verify Email", type="primary")
+            code = st.text_input("6-digit code", max_chars=6)
+            verify = st.form_submit_button("Verify", type="primary")
 
             if verify:
                 if not code.isdigit():
-                    st.error("Invalid code")
+                    st.error("Invalid")
                 else:
-                    user = pd.read_sql(
-                        text("SELECT * FROM users WHERE email = :e AND verification_code = :c"),
+                    pending = pd.read_sql(
+                        text("SELECT * FROM pending_users WHERE email = :e AND verification_code = :c"),
                         engine,
                         params={"e": st.session_state.pending_email, "c": int(code)}
                     )
-                    if user.empty:
-                        st.error("Wrong code")
+                    if pending.empty:
+                        st.error("Wrong or expired code")
                     else:
-                        with engine.begin() as conn:
-                            conn.execute(
-                                text("UPDATE users SET email_verified = TRUE, verification_code = NULL WHERE email = :e"),
-                                {"e": st.session_state.pending_email}
-                            )
-                        st.success("Email verified! Awaiting admin approval")
-                        st.balloons()
-                        del st.session_state.pending_email
-                        st.rerun()
-elif selected == "Live Dashboard":
+                        user_data = pending.iloc[0]
+                        try:
+                            with engine.begin() as conn:
+                                # Move to real users
+                                conn.execute(text("""
+                                    INSERT INTO users (email, password_hash, full_name, user_type, email_verified, is_approved, created_at)
+                                    VALUES (:e, :p, :n, :t, TRUE, FALSE, NOW())
+                                """), {
+                                    "e": user_data["email"],
+                                    "p": user_data["password_hash"],
+                                    "n": user_data["full_name"],
+                                    "t": user_data["user_type"]
+                                })
+                                # Delete from pending
+                                conn.execute(text("DELETE FROM pending_users WHERE email = :e"), {"e": user_data["email"]})
+
+                            st.success("Account verified! Awaiting admin approval.")
+                            st.balloons()
+                            del st.session_state.pending_email
+                            st.rerun()
+                        except:
+                            st.error("Failed to activate account")elif selected == "Live Dashboard":
     st.markdown("### Live Education Statistics • Abia State")
 
     # Auto-refresh every 60 seconds
