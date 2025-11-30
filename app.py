@@ -29,7 +29,6 @@ def hash_password(password: str) -> str:
     """Return SHA-256 hash of password as hex string"""
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-st.set_option('deprecation.showfileUploaderEncoding', False)
 # ← ADD THIS LINE
 if not st.secrets.get("DEBUG", False):
     st._is_running_with_streamlit = False  # Hides source code
