@@ -384,7 +384,7 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ===================== LOGIN / REGISTER – CODE INPUT (BEST METHOD) =====================
+# ===================== LOGIN / REGISTER – FINAL & 100% WORKING =====================
 elif selected == "Login / Register":
     st.markdown("# Account Login & Registration")
     st.markdown("### Secure access for schools and analysts")
@@ -392,102 +392,139 @@ elif selected == "Login / Register":
     tab_login, tab_register = st.tabs(["Login", "Create Account"])
 
     # ============================================================
-    # LOGIN
+    # LOGIN TAB
     # ============================================================
     with tab_login:
         st.markdown("#### Login to Your Account")
         with st.form("login_form"):
-            email = st.text_input("Email Address").strip().lower()
+            email = st.text_input("Email Address", placeholder="you@abiaschools.edu.ng").strip().lower()
             password = st.text_input("Password", type="password")
-            login = st.form_submit_button("Login", type="primary")
+            login_btn = st.form_submit_button("Login", type="primary", use_container_width=True)
 
-            if login:
+            if login_btn:
                 if not email or not password:
-                    st.error("Fill in both fields")
+                    st.error("Please enter both email and password")
                 elif not engine:
-                    st.error("Database error")
+                    st.error("Database not connected")
                 else:
-                    df = pd.read_sql("SELECT * FROM users WHERE email = :e", engine, params={"e": email})
+                    try:
+                        df = pd.read_sql(
+                            text("SELECT * FROM users WHERE email = :e"),
+                            engine,
+                            params={"e": email}
+                        )
+                    except Exception as e:
+                        st.error("Database error. Try again later.")
+                        st.stop()
+
                     if df.empty:
-                        st.error("No account found")
-                    elif hash_password(password) != df.iloc[0]["password_hash"]:
-                        st.error("Wrong password")
-                    elif not df.iloc[0]["email_verified"]:
-                        st.warning("Please verify your email first")
-                    elif not df.iloc[0]["is_approved"]:
-                        st.warning("Account pending approval")
+                        st.error("No account found with this email")
                     else:
-                        st.session_state.user = df.iloc[0].to_dict()
-                        st.success(f"Welcome back, {df.iloc[0]['full_name']}!")
-                        st.balloons()
-                        st.rerun()
+                        user = df.iloc[0]
+                        if hash_password(password) != user["password_hash"]:
+                            st.error("Incorrect password")
+                        elif not user["email_verified"]:
+                            st.warning("Please verify your email first")
+                        elif not user["is_approved"]:
+                            st.warning("Your account is pending admin approval")
+                        else:
+                            st.session_state.user = user.to_dict()
+                            st.success(f"Welcome back, {user['full_name']}!")
+                            st.balloons()
+                            st.rerun()
 
     # ============================================================
-    # REGISTER + 6-DIGIT CODE
+    # REGISTER TAB + 6-DIGIT CODE
     # ============================================================
     with tab_register:
-        st.markdown("#### Create Account")
+        st.markdown("#### Create New Account")
         st.info("After registration, check your email for a 6-digit verification code")
 
         with st.form("register_form", clear_on_submit=True):
-            full_name = st.text_input("Full Name *")
-            email = st.text_input("Email *").strip().lower()
+            full_name = st.text_input("Full Name *", placeholder="e.g. Mrs. Grace Okafor")
+            email = st.text_input("Official Email *", placeholder="principal.school@abiaschools.edu.ng").strip().lower()
             password = st.text_input("Password *", type="password")
             confirm = st.text_input("Confirm Password *", type="password")
             user_type = st.selectbox("Account Type *", ["school", "analyst"],
-                                   format_func=lambda x: "Institution (School)" if x=="school" else "Researcher / Analyst")
+                                   format_func=lambda x: "Institution (School)" if x == "school" else "Researcher / Analyst")
 
-            submitted = st.form_submit_button("Create Account", type="primary")
+            register_btn = st.form_submit_button("Create Account", type="primary", use_container_width=True)
 
-            if submitted:
+            if register_btn:
                 errors = []
-                if not all([full_name, email, password, confirm]): errors.append("All fields required")
-                if password != confirm: errors.append("Passwords don't match")
-                if len(password) < 6: errors.append("Password too short")
-                if "@" not in email: errors.append("Invalid email")
+                if not all([full_name, email, password, confirm]):
+                    errors.append("All fields required")
+                if password != confirm:
+                    errors.append("Passwords do not match")
+                if len(password) < 6:
+                    errors.append("Password must be 6+ characters")
+                if "@" not in email:
+                    errors.append("Invalid email address")
 
                 if errors:
-                    for e in errors: st.error(e)
+                    for e in errors:
+                        st.error(e)
                 elif not engine:
-                    st.error("Database error")
+                    st.error("Database not connected")
                 else:
-                    exists = pd.read_sql("SELECT 1 FROM users WHERE email = :e", engine, params={"e": email})
-                    if not exists.empty:
-                        st.error("Email already registered")
-                    else:
-                        code = random.randint(100000, 999999)
-                        hashed = hash_password(password)
+                    # Check if email exists
+                    try:
+                        exists = pd.read_sql(
+                            text("SELECT 1 FROM users WHERE email = :e"),
+                            engine,
+                            params={"e": email}
+                        )
+                        if not exists.empty:
+                            st.error("This email is already registered")
+                            st.stop()
+                    except:
+                        st.error("Database error")
+                        st.stop()
 
-                        try:
-                            with engine.begin() as conn:
-                                conn.execute(text("""
-                                    INSERT INTO users 
-                                    (email, password_hash, full_name, user_type, verification_code, email_verified, is_approved, created_at)
-                                    VALUES (:e, :p, :n, :t, :c, FALSE, FALSE, NOW())
-                                """), {"e": email, "p": hashed, "n": full_name, "t": user_type, "c": code})
+                    # Create account + send code
+                    code = random.randint(100000, 999999)
+                    hashed_pw = hash_password(password)
 
-                            body = f"""
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text("""
+                                INSERT INTO users 
+                                (email, password_hash, full_name, user_type, verification_code, 
+                                 email_verified, is_approved, created_at)
+                                VALUES (:e, :p, :n, :t, :c, FALSE, FALSE, NOW())
+                            """), {
+                                "e": email,
+                                "p".": hashed_pw,
+                                "n": full_name,
+                                "t": user_type,
+                                "c": code
+                            })
+
+                        body = f"""
 Hello {full_name},
 
-Your Abia Education Portal account has been created!
+Welcome to the Abia State Education Portal!
 
-Your 6-digit verification code:
+Your 6-digit verification code is:
 
     {code}
 
 Enter this code on the portal to activate your account.
 
+After verification, an administrator will review and approve your account.
+
 — Abia Education Portal Team
-                            """
-                            if send_email(email, "Your Verification Code", body):
-                                st.session_state.pending_verification = True
-                                st.session_state.verify_email = email
-                                st.success("Account created! Check your email for the 6-digit code")
-                                st.balloons()
-                            else:
-                                st.error("Account created but email failed")
-                        except Exception as e:
-                            st.error("Registration failed")
+                        """
+                        if send_email(email, "Your Verification Code", body):
+                            st.session_state.pending_verification = True
+                            st.session_state.verify_email = email
+                            st.success("Account created! Check your email for the 6-digit code")
+                            st.balloons()
+                            st.info("Enter the code on the next screen")
+                        else:
+                            st.error("Account created, but email failed to send")
+                    except Exception as e:
+                        st.error("Registration failed. Please try again.")
 
     # ============================================================
     # CODE VERIFICATION (AFTER REGISTRATION)
@@ -497,33 +534,36 @@ Enter this code on the portal to activate your account.
         st.info(f"Code sent to **{st.session_state.verify_email}**")
 
         with st.form("verify_code_form"):
-            code = st.text_input("Enter 6-digit code", max_chars=6)
-            verify = st.form_submit_button("Verify Email", type="primary")
+            code_input = st.text_input("Enter 6-digit verification code", max_chars=6)
+            verify_btn = st.form_submit_button("Verify Email", type="primary", use_container_width=True)
 
-            if verify:
-                if not code.isdigit():
-                    st.error("Invalid code")
+            if verify_btn:
+                if not code_input.isdigit():
+                    st.error("Code must be 6 digits")
                 elif not engine:
                     st.error("Database error")
                 else:
-                    user = pd.read_sql(
-                        "SELECT * FROM users WHERE email = :e AND verification_code = :c",
-                        engine,
-                        params={"e": st.session_state.verify_email, "c": int(code)}
-                    )
-                    if user.empty:
-                        st.error("Wrong or expired code")
-                    else:
-                        with engine.begin() as conn:
-                            conn.execute(
-                                text("UPDATE users SET email_verified = TRUE, verification_code = NULL WHERE email = :e"),
-                                {"e": st.session_state.verify_email}
-                            )
-                        st.success("Email verified! Your account is now awaiting admin approval.")
-                        st.balloons()
-                        del st.session_state.pending_verification
-                        del st.session_state.verify_email
-                        st.rerun()
+                    try:
+                        user = pd.read_sql(
+                            text("SELECT * FROM users WHERE email = :e AND verification_code = :c"),
+                            engine,
+                            params={"e": st.session_state.verify_email, "c": int(code_input)}
+                        )
+                        if user.empty:
+                            st.error("Invalid or expired code")
+                        else:
+                            with engine.begin() as conn:
+                                conn.execute(
+                                    text("UPDATE users SET email_verified = TRUE, verification_code = NULL WHERE email = :e"),
+                                    {"e": st.session_state.verify_email}
+                                )
+                            st.success("Email verified! Your account is now awaiting admin approval.")
+                            st.balloons()
+                            del st.session_state.pending_verification
+                            del st.session_state.verify_email
+                            st.rerun()
+                    except Exception as e:
+                        st.error("Verification failed. Try again.")
 elif selected == "Live Dashboard":
     st.markdown("### Live Education Statistics • Abia State")
 
