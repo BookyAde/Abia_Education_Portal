@@ -20,6 +20,11 @@ import hashlib
 import csv
 
 
+# ===================== PASSWORD HASHING FUNCTION (MUST BE AT TOP) =====================
+def hash_password(password: str) -> str:
+    """Return SHA-256 hash of password as hex string"""
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
 st.set_option('deprecation.showPyplotGlobalUse', False)
 st.set_option('deprecation.showfileUploaderEncoding', False)
 # ← ADD THIS LINE
@@ -380,11 +385,6 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
     """, unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
-
-# ===================== PASSWORD HASHING FUNCTION (MUST BE AT TOP) =====================
-def hash_password(password: str) -> str:
-    """Return SHA-256 hash of password as hex string"""
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 # ===================== LOGIN / REGISTER PAGE – FINAL & PERFECT =====================
 elif selected == "Login / Register":
