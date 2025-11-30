@@ -553,7 +553,8 @@ Code expires in 24 hours.
                             del st.session_state.pending_email
                             st.rerun()
                         except:
-                            st.error("Failed to activate account")elif selected == "Live Dashboard":
+                            st.error("Failed to activate account")
+elif selected == "Live Dashboard":
     st.markdown("### Live Education Statistics • Abia State")
 
     # Auto-refresh every 60 seconds
