@@ -106,13 +106,6 @@ def send_email(to_email, subject, body):
 if 'admin' not in st.session_state:
     st.session_state.admin = False
 
-# CRITICAL: If someone tries to force "Admin Panel" without being logged in → kick them out
-if selected == "Admin Panel" and not st.session_state.admin:
-    st.error("Access Denied. You are not authorized.")
-    st.session_state.selected = "Home"   # Force redirect
-    st.rerun()
-# ==========================================================================
-
 
 # ===================== FINAL SIDEBAR – USER AUTHENTICATION READY =====================
 with st.sidebar:
@@ -249,10 +242,12 @@ with st.sidebar:
             orientation="vertical",
             styles={"container": {"background-color": "#f8fff8"}, "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white"}}
         )
+# CRITICAL: If someone tries to force "Admin Panel" without being logged in → kick them out
+if selected == "Admin Panel" and not st.session_state.admin:
+    st.error("Access Denied. You are not authorized.")
+    st.session_state.selected = "Home"   # Force redirect
+    st.rerun()
 
-# ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-# ADD THIS SINGLE LINE TO CLOSE THE SIDEBAR BLOCK
-# ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
 # ===================== DATA FUNCTIONS =====================
 @st.cache_data(ttl=60)
 def get_live_data():
