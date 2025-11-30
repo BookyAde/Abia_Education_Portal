@@ -494,7 +494,7 @@ elif selected == "Login / Register":
                                 VALUES (:e, :p, :n, :t, :c, FALSE, FALSE, NOW())
                             """), {
                                 "e": email,
-                                "p".": hashed_pw,
+                                "p": hashed_pw,
                                 "n": full_name,
                                 "t": user_type,
                                 "c": code
