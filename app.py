@@ -108,8 +108,7 @@ if selected == "Admin Panel" and not st.session_state.admin:
 
 
 # ===================== FINAL SIDEBAR – USER AUTHENTICATION READY =====================
-with st.sidebar:
-    st.image("assets/Abia_logo.jpeg", width=180)
+
     st.markdown("<h2 style='text-align:center; color:#006400;'>Navigation</h2>", unsafe_allow_html=True)
 
     # Beautiful styling
@@ -220,7 +219,7 @@ with st.sidebar:
             styles={"container": {"background-color": "#f8fff8"}, "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white"}}
         )
 
-    # ——————————————————————— PUBLIC / NOT LOGGED IN ———————————————————————
+        # ——————————————————————— PUBLIC / NOT LOGGED IN ———————————————————————
     else:
         selected = option_menu(
             menu_title=None,
@@ -242,6 +241,7 @@ with st.sidebar:
             orientation="vertical",
             styles={"container": {"background-color": "#f8fff8"}, "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white"}}
         )
+
 # ===================== DATA FUNCTIONS =====================
 @st.cache_data(ttl=60)
 def get_live_data():
@@ -383,7 +383,7 @@ def hash_password(password: str) -> str:
     """Return SHA-256 hash of password as hex string"""
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-## ===================== LOGIN / REGISTER PAGE – FINAL & PERFECT =====================
+# ===================== LOGIN / REGISTER PAGE – FINAL & PERFECT =====================
 elif selected == "Login / Register":
     st.markdown("# Account Login & Registration")
     st.markdown("### Secure access for schools and researchers")
