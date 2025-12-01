@@ -9,6 +9,5 @@ xlsxwriter
 passlib[bcrypt]
 plotly
 matplotlib
-hashlib
 csv
 ast
