@@ -430,10 +430,6 @@ elif selected == "Login / Register":
     # ============================================================
     # CREATE ACCOUNT TAB + RESEND + INSTANT VERIFICATION
     # ============================================================
-# ----------------- LOGIN / REGISTER / ADMIN (Refined & Complete) -----------------
-import random
-from datetime import datetime, timedelta
-from sqlalchemy import text
 
 # Ensure some session-state keys exist
 st.session_state.setdefault("resend_cooldown", 0)
