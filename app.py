@@ -193,21 +193,22 @@ with st.sidebar:
             st.session_state.admin = False
             st.rerun()
 
-    # ——————————————————————— LOGGED-IN USER MENU (School / Analyst) ———————————————————————
+    # ——————————————————————— LOGGED-IN USER MENU (FINAL & CLEAN) ———————————————————————
     elif st.session_state.get("user"):
         user = st.session_state.user
+
+        # Base menu for all logged-in users
         options = ["Home", "Live Dashboard", "School Lookup", "Transparency Ranking"]
         icons = ["house-fill", "graph-up-arrow", "search-heart-fill", "trophy-fill"]
 
-        # Approved schools can submit data
-        if user['user_type'] == 'school' and user['is_approved']:
+        # Schools can submit data (no approval needed)
+        if user.get("user_type") == "school":
             options.insert(2, "Submit Data")
             icons.insert(2, "cloud-upload-fill")
 
-        # Approved users (school or analyst) can download data
-        if user['is_approved']:
-            options.append("Request Data")
-            icons.append("cloud-download-fill")
+        # Everyone can download data (no approval needed)
+        options.append("Request Data")
+        icons.append("cloud-download-fill")
 
         selected = option_menu(
             menu_title=None,
@@ -215,9 +216,11 @@ with st.sidebar:
             icons=icons,
             default_index=0,
             orientation="vertical",
-            styles={"container": {"background-color": "#f8fff8"}, "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white"}}
+            styles={
+                "container": {"background-color": "#f8fff8"},
+                "nav-link-selected": {"background": "linear-gradient(90deg, #006400, #228B22)", "color": "white", "font-weight": "bold"}
+            }
         )
-
         # ——————————————————————— PUBLIC / NOT LOGGED IN ———————————————————————
     else:
         selected = option_menu(
