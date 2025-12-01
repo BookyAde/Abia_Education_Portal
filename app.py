@@ -23,7 +23,6 @@ import csv
 from datetime import datetime
 
 
-st.write("SECRETS LOADED:", list(st.secrets.keys()))
 
 # ===================== PASSWORD HASHING FUNCTION (MUST BE AT TOP) =====================
 def hash_password(password: str) -> str:
