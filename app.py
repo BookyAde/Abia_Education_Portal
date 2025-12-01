@@ -1271,7 +1271,7 @@ elif selected == "Transparency Ranking":
         st.markdown("---")
         st.caption("Green row = Best performing • Red row = Needs urgent attention")
 
-# ===================== USER MANAGEMENT – FULLY FINAL WITH UNBLOCK + REASON =====================
+# ===================== USER MANAGEMENT – FINAL & BULLETPROOF =====================
 elif selected == "User Management":
     if not st.session_state.get("admin"):
         st.error("Admin access required")
@@ -1287,7 +1287,8 @@ elif selected == "User Management":
     # Load all users
     try:
         users = pd.read_sql("""
-            SELECT id, full_name, email, user_type, email_verified, is_blocked, is_admin, created_at
+            SELECT id, full_name, email, user_type, email_verified, 
+                   is_blocked, is_admin, created_at
             FROM users 
             ORDER BY created_at DESC
         """, engine)
@@ -1298,15 +1299,23 @@ elif selected == "User Management":
     if users.empty:
         st.info("No users registered yet.")
     else:
-        # Stats
+        # Summary stats
         col1, col2, col3 = st.columns(3)
         with col1: st.metric("Total Users", len(users))
-        with col2: st.metric("Blocked", len(users[users["is_blocked"]]))
-        with col3: st.metric("Admins", len(users[users["is_admin"]]))
+        with col2: st.metric("Blocked", len(users[users["is_blocked"] == True]))
+        with col3: st.metric("Admins", len(users[users["is_admin"] == True]))
 
         st.markdown("---")
 
         for _, user in users.iterrows():
+            # Safe date formatting
+            created_date = "Unknown"
+            if pd.notna(user['created_at']):
+                try:
+                    created_date = str(user['created_at'])[:10]  # YYYY-MM-DD
+                except:
+                    created_date = "Invalid"
+
             status = "Active"
             if user["is_blocked"]: status = "Blocked"
             if user["is_admin"]: status = "Admin"
@@ -1315,7 +1324,7 @@ elif selected == "User Management":
                 col1, col2 = st.columns([2, 3])
 
                 with col1:
-                    st.write(f"**Registered:** {user['created_at'][:10]}")
+                    st.write(f"**Registered:** {created_date}")
                     st.write(f"**Email Verified:** {'Yes' if user['email_verified'] else 'No'}")
 
                 with col2:
@@ -1335,13 +1344,13 @@ elif selected == "User Management":
                                         body = f"""
 Hello {user['full_name']},
 
-Congratulations! 
+Congratulations!
 
 You have been promoted to **Administrator** on the Abia State Education Portal.
 
 **Reason:** {reason}
 
-You now have full access to approve submissions and manage users.
+You now have full access to manage users and approve submissions.
 
 Thank you for your dedication!
 
@@ -1384,7 +1393,7 @@ If you believe this is a mistake, please contact the admin team.
                                     except Exception as e:
                                         st.error(f"Failed: {e}")
 
-                    # UNBLOCK USER (REINSTATE AFTER REVIEW)
+                    # UNBLOCK USER (REINSTATE)
                     if user["is_blocked"]:
                         with st.form(key=f"unblock_form_{user['id']}"):
                             st.markdown("#### Unblock User")
@@ -1400,7 +1409,7 @@ If you believe this is a mistake, please contact the admin team.
                                         body = f"""
 Hello {user['full_name']},
 
-Great news! 
+Great news!
 
 Your account has been **unblocked** on the Abia State Education Portal.
 
@@ -1429,8 +1438,8 @@ Welcome back!
                                     f"Hello {user['full_name']},\n\nYour admin privileges have been revoked.\n\n— Abia Education Portal Administration")
                                 st.info("Admin rights revoked")
                                 st.rerun()
-                            except:
-                                st.error("Failed")
+                            except Exception as e:
+                                st.error(f"Failed: {e}")
 
 # ---------- ADMIN LOGIN ----------
 elif selected == "Admin Login":
