@@ -609,19 +609,22 @@ elif selected == "Login / Register":
                             st.rerun()
 
     # ============================================================
-    # ADMIN LOGIN TAB — SEPARATE & SECURE
+    # ADMIN LOGIN TAB — SEPARATE & SECURE (100% FIXED)
     # ============================================================
     with tab_admin:
         st.markdown("#### Administrator Login")
         st.markdown("**Authorized personnel only**")
 
+        # Initialize session state
         if "admin_attempts" not in st.session_state:
             st.session_state.admin_attempts = 0
+        if "admin_lockout" not in st.session_state:
             st.session_state.admin_lockout = None
 
-        if st.session_state.admin_lockout and pd.Timestamp.now() < st.sessions_state.admin_lockout:
+        # Check lockout
+        if st.session_state.admin_lockout and pd.Timestamp.now() < st.session_state.admin_lockout:
             remaining = int((st.session_state.admin_lockout - pd.Timestamp.now()).total_seconds())
-            st.error(f"Too many attempts. Try again in {remaining}s")
+            st.error(f"Too many failed attempts. Try again in {remaining} seconds.")
         else:
             with st.form("admin_login_form"):
                 pwd = st.text_input("Admin Password", type="password")
@@ -629,23 +632,29 @@ elif selected == "Login / Register":
                 admin_login = st.form_submit_button("Login as Admin", type="primary")
 
                 if admin_login:
-                    if pwd == st.secrets["ADMIN_PASSWORD"] and otp == st.secrets["ADMIN_2FA"]:
-                        st.session_state.admin = True
-                        st.session_state.admin_attempts = 0
-                        st.success("Admin access granted")
-                        st.balloons()
-                        st.rerun()
-                    else:
-                        st.session_state.admin_attempts += 1
-                        if st.session_state.admin_attempts >= 5:
-                            st.session_state.admin_lockout = pd.Timestamp.now() + pd.Timedelta(minutes=15)
-                            st.error("Locked for 15 minutes")
+                    try:
+                        if pwd == st.secrets["ADMIN_PASSWORD"] and otp == st.secrets["ADMIN_2FA"]:
+                            st.session_state.admin = True
+                            st.session_state.admin_attempts = 0
+                            st.success("Admin access granted!")
+                            st.balloons()
+                            st.rerun()
                         else:
-                            st.error(f"Access denied ({st.session_state.admin_attempts}/5)")
+                            st.session_state.admin_attempts += 1
+                            if st.session_state.admin_attempts >= 5:
+                                st.session_state.admin_lockout = pd.Timestamp.now() + pd.Timedelta(minutes=15)
+                                st.error("Account locked for 15 minutes due to too many failed attempts.")
+                            else:
+                                st.error(f"Access denied — Attempt {st.session_state.admin_attempts}/5")
+                    except KeyError as e:
+                        st.error(f"Admin credentials not configured: {e}")
 
-        if st.button("Logout Admin"):
-            st.session_state.admin = False
-            st.rerun()
+        # Logout button
+        if st.session_state.get("admin"):
+            if st.button("Logout Admin", type="secondary"):
+                st.session_state.admin = False
+                st.success("Admin logged out")
+                st.rerun()
     
 elif selected == "Live Dashboard":
     st.markdown("### Live Education Statistics • Abia State")
