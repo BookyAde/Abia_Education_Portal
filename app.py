@@ -384,29 +384,35 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ===================== FINAL: LOGIN + REGISTER + INSTANT ACCESS =====================
+# ===================== FINAL: LOGIN + REGISTER + ADMIN + PASSWORD RESET + VERIFICATION =====================
 elif selected == "Login / Register":
     st.markdown("# Account Login & Registration")
-    st.markdown("### Secure access for schools and analysts")
+    st.markdown("### Secure access for schools, analysts, and administrators")
 
-    tab_login, tab_register = st.tabs(["Login", "Create Account"])
+    # Three tabs
+    tab_user, tab_register, tab_admin = st.tabs(["User Login", "Create Account", "Admin Login"])
 
-    # Cooldown for resend
+    # Cooldown for resend/reset
     if "resend_cooldown" not in st.session_state:
         st.session_state.resend_cooldown = 0
 
     # ============================================================
-    # LOGIN TAB
+    # USER LOGIN + FORGOT PASSWORD + RESET
     # ============================================================
-    with tab_login:
-        st.markdown("#### Login to Your Account")
+    with tab_user:
+        st.markdown("#### User Login")
 
-        with st.form("login_form"):
+        with st.form("user_login_form"):
             email = st.text_input("Email Address", placeholder="you@abiaschools.edu.ng").strip().lower()
             password = st.text_input("Password", type="password")
-            login = st.form_submit_button("Login", type="primary")
+            col1, col2 = st.columns(2)
+            with col1:
+                login_btn = st.form_submit_button("Login", type="primary")
+            with col2:
+                forgot_btn = st.form_submit_button("Forgot Password?", type="secondary")
 
-            if login:
+            # ——— NORMAL LOGIN ———
+            if login_btn:
                 if not email or not password:
                     st.error("Please fill both fields")
                 elif not engine:
@@ -418,14 +424,82 @@ elif selected == "Login / Register":
                     elif hash_password(password) != df.iloc[0]["password_hash"]:
                         st.error("Wrong password")
                     elif not df.iloc[0]["email_verified"]:
-                        st.warning("Email not verified. Go to Create Account tab")
+                        st.warning("Email not verified")
                     elif df.iloc[0].get("is_blocked"):
                         st.error("Your account is blocked")
+                    elif not df.iloc[0].get("is_approved", True):
+                        st.warning("Pending admin approval")
                     else:
                         st.session_state.user = df.iloc[0].to_dict()
                         st.success(f"Welcome back, {df.iloc[0]['full_name']}!")
                         st.balloons()
                         st.rerun()
+
+            # ——— FORGOT PASSWORD → SEND RESET CODE ———
+            if forgot_btn:
+                if not email:
+                    st.error("Enter your email first")
+                elif not engine:
+                    st.error("Database error")
+                else:
+                    df = pd.read_sql(text("SELECT * FROM users WHERE email = :e"), engine, params={"e": email})
+                    if df.empty:
+                        st.error("No account found")
+                    elif df.iloc[0].get("is_blocked"):
+                        st.error("Blocked accounts cannot reset password")
+                    else:
+                        reset_code = random.randint(100000, 999999)
+                        expires = pd.Timestamp.now() + pd.Timedelta(minutes=15)
+                        try:
+                            with engine.begin() as conn:
+                                conn.execute(text("UPDATE users SET reset_code = :c, reset_expires = :exp WHERE email = :e"),
+                                           {"c": reset_code, "exp": expires, "e": email})
+                            body = f"Your reset code: {reset_code}\n\nExpires in 15 minutes"
+                            if send_email(email, "Password Reset Code", body):
+                                st.session_state.reset_email = email
+                                st.success("Reset code sent! Check your email")
+                                st.balloons()
+                        except:
+                            st.error("Failed to send reset code")
+
+        # ——— PASSWORD RESET FORM ———
+        if st.session_state.get("reset_email"):
+            st.markdown("### Reset Your Password")
+            st.info(f"Code sent to **{st.session_state.reset_email}**")
+
+            with st.form("reset_password_form"):
+                code_input = st.text_input("Enter 6-digit reset code", max_chars=6)
+                new_pw = st.text_input("New Password", type="password")
+                confirm_pw = st.text_input("Confirm New Password", type="password")
+                reset_btn = st.form_submit_button("Reset Password", type="primary")
+
+                if reset_btn:
+                    if not code_input.isdigit():
+                        st.error("Invalid code")
+                    elif new_pw != confirm_pw:
+                        st.error("Passwords don't match")
+                    elif len(new_pw) < 6:
+                        st.error("Password too short")
+                    else:
+                        user = pd.read_sql(text("""
+                            SELECT * FROM users 
+                            WHERE email = :e AND reset_code = :c AND reset_expires > NOW()
+                        """), engine, params={"e": st.session_state.reset_email, "c": int(code_input)})
+                        if user.empty:
+                            st.error("Invalid or expired code")
+                        else:
+                            try:
+                                with engine.begin() as conn:
+                                    conn.execute(text("""
+                                        UPDATE users SET password_hash = :p, reset_code = NULL, reset_expires = NULL 
+                                        WHERE email = :e
+                                    """), {"p": hash_password(new_pw), "e": st.session_state.reset_email})
+                                st.success("Password reset successful! You can now log in")
+                                st.balloons()
+                                del st.session_state.reset_email
+                                st.rerun()
+                            except:
+                                st.error("Failed to reset password")
 
     # ============================================================
     # CREATE ACCOUNT + INSTANT VERIFICATION
@@ -434,7 +508,7 @@ elif selected == "Login / Register":
         st.markdown("#### Create New Account")
         st.info("After clicking Create Account, enter the code sent to your email")
 
-        with st.form("register_form", clear_on_submit=True):
+        with st.form("register_form_final", clear_on_submit=True):
             full_name = st.text_input("Full Name *")
             email = st.text_input("Email Address *").strip().lower()
             password = st.text_input("Password *", type="password")
@@ -513,7 +587,7 @@ elif selected == "Login / Register":
             st.markdown("### Verify Your Email")
             st.info(f"Code sent to **{st.session_state.verify_email}**")
 
-            with st.form("verify_form"):
+            with st.form("verify_form_final"):
                 code_input = st.text_input("Enter 6-digit code", max_chars=6)
                 verify = st.form_submit_button("Verify Email", type="primary")
 
@@ -536,129 +610,19 @@ elif selected == "Login / Register":
                             st.rerun()
 
     # ============================================================
-    # CREATE ACCOUNT TAB + INSTANT VERIFICATION
-    # ============================================================
-    with tab_register:
-        st.markdown("#### Create New Account")
-        st.info("After clicking Create Account, enter the code sent to your email")
-
-        with st.form("register_form_v2", clear_on_submit=True):
-            full_name = st.text_input("Full Name *")
-            email = st.text_input("Email Address *").strip().lower()
-            password = st.text_input("Password *", type="password")
-            confirm = st.text_input("Confirm Password *", type="password")
-            user_type = st.selectbox("Account Type *", ["school", "analyst"])
-
-            col1, col2 = st.columns(2)
-            with col1:
-                register = st.form_submit_button("Create Account", type="primary")
-            with col2:
-                resend = st.form_submit_button("Resend Code", type="secondary")
-
-            # ——— REGISTRATION ———
-            if register:
-                if not all([full_name, email, password, confirm]):
-                    st.error("All fields required")
-                elif password != confirm:
-                    st.error("Passwords don't match")
-                elif len(password) < 6:
-                    st.error("Password too short")
-                elif "@" not in email:
-                    st.error("Invalid email")
-                elif not engine:
-                    st.error("Database error")
-                else:
-                    exists = pd.read_sql(text("SELECT 1 FROM users WHERE email = :e"), engine, params={"e": email})
-                    if not exists.empty:
-                        st.error("Email already registered")
-                    else:
-                        code = random.randint(100000, 999999)
-                        expires = pd.Timestamp.now() + pd.Timedelta(minutes=10)
-                        try:
-                            with engine.begin() as conn:
-                                conn.execute(text("""
-                                    INSERT INTO users 
-                                    (email, password_hash, full_name, user_type, verification_code, code_expires, 
-                                     email_verified, is_approved, created_at)
-                                    VALUES (:e, :p, :n, :t, :c, :exp, FALSE, FALSE, NOW())
-                                """), {
-                                    "e": email, "p": hash_password(password), "n": full_name,
-                                    "t": user_type, "c": code, "exp": expires
-                                })
-                            if send_email(email, "Verification Code", f"Your code: {code}\n\nExpires in 10 minutes"):
-                                st.session_state.verify_email = email
-                                st.success("Account created! Enter code below")
-                                st.balloons()
-                                st.rerun()
-                        except:
-                            st.error("Failed to create account")
-
-            # ——— RESEND CODE ———
-            if resend:
-                if pd.Timestamp.now().timestamp() - st.session_state.resend_cooldown < 60:
-                    st.error("Wait 60 seconds")
-                elif not email:
-                    st.error("Enter email first")
-                else:
-                    df = pd.read_sql(text("SELECT * FROM users WHERE email = :e"), engine, params={"e": email})
-                    if df.empty or df.iloc[0]["email_verified"]:
-                        st.error("No pending account")
-                    else:
-                        new_code = random.randint(100000, 999999)
-                        expires = pd.Timestamp.now() + pd.Timedelta(minutes=10)
-                        with engine.begin() as conn:
-                            conn.execute(text("UPDATE users SET verification_code = :c, code_expires = :exp WHERE email = :e"),
-                                       {"c": new_code, "exp": expires, "e": email})
-                        if send_email(email, "New Code", f"New code: {new_code}"):
-                            st.session_state.verify_email = email
-                            st.session_state.resend_cooldown = pd.Timestamp.now().timestamp()
-                            st.success("New code sent!")
-                            st.rerun()
-
-        # ——— VERIFICATION BOX (APPEARS INSTANTLY) ———
-        if st.session_state.get("verify_email"):
-            st.markdown("### Verify Your Email")
-            st.info(f"Code sent to **{st.session_state.verify_email}**")
-
-            with st.form("verify_form"):
-                code = st.text_input("6-digit code", max_chars=6)
-                verify = st.form_submit_button("Verify Email", type="primary")
-
-                if verify:
-                    if not code.isdigit():
-                        st.error("Invalid code")
-                    else:
-                        user = pd.read_sql(text("""
-                            SELECT * FROM users WHERE email = :e AND verification_code = :c AND code_expires > NOW()
-                        """), engine, params={"e": st.session_state.verify_email, "c": int(code)})
-                        if user.empty:
-                            st.error("Wrong or expired code")
-                        else:
-                            with engine.begin() as conn:
-                                conn.execute(text("UPDATE users SET email_verified = TRUE, verification_code = NULL, code_expires = NULL WHERE email = :e"),
-                                           {"e": st.session_state.verify_email})
-                            st.success("Email verified! Awaiting admin approval")
-                            st.balloons()
-                            del st.session_state.verify_email
-                            st.rerun()
-
-    # ============================================================
-    # ADMIN LOGIN TAB — SEPARATE & SECURE (100% FIXED)
+    # ADMIN LOGIN TAB — SEPARATE & SECURE
     # ============================================================
     with tab_admin:
         st.markdown("#### Administrator Login")
         st.markdown("**Authorized personnel only**")
 
-        # Initialize session state
         if "admin_attempts" not in st.session_state:
             st.session_state.admin_attempts = 0
-        if "admin_lockout" not in st.session_state:
             st.session_state.admin_lockout = None
 
-        # Check lockout
         if st.session_state.admin_lockout and pd.Timestamp.now() < st.session_state.admin_lockout:
             remaining = int((st.session_state.admin_lockout - pd.Timestamp.now()).total_seconds())
-            st.error(f"Too many failed attempts. Try again in {remaining} seconds.")
+            st.error(f"Too many attempts. Try again in {remaining} seconds")
         else:
             with st.form("admin_login_form"):
                 pwd = st.text_input("Admin Password", type="password")
@@ -666,168 +630,23 @@ elif selected == "Login / Register":
                 admin_login = st.form_submit_button("Login as Admin", type="primary")
 
                 if admin_login:
-                    try:
-                        if pwd == st.secrets["ADMIN_PASSWORD"] and otp == st.secrets["ADMIN_2FA"]:
-                            st.session_state.admin = True
-                            st.session_state.admin_attempts = 0
-                            st.success("Admin access granted!")
-                            st.balloons()
-                            st.rerun()
+                    if pwd == st.secrets["ADMIN_PASSWORD"] and otp == st.secrets["ADMIN_2FA"]:
+                        st.session_state.admin = True
+                        st.session_state.admin_attempts = 0
+                        st.success("Admin access granted!")
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.session_state.admin_attempts += 1
+                        if st.session_state.admin_attempts >= 5:
+                            st.session_state.admin_lockout = pd.Timestamp.now() + pd.Timedelta(minutes=15)
+                            st.error("Locked for 15 minutes")
                         else:
-                            st.session_state.admin_attempts += 1
-                            if st.session_state.admin_attempts >= 5:
-                                st.session_state.admin_lockout = pd.Timestamp.now() + pd.Timedelta(minutes=15)
-                                st.error("Account locked for 15 minutes due to too many failed attempts.")
-                            else:
-                                st.error(f"Access denied — Attempt {st.session_state.admin_attempts}/5")
-                    except KeyError as e:
-                        st.error(f"Admin credentials not configured: {e}")
+                            st.error(f"Access denied ({st.session_state.admin_attempts}/5)")
 
-        # Logout button
-        if st.session_state.get("admin"):
-            if st.button("Logout Admin", type="secondary"):
-                st.session_state.admin = False
-                st.success("Admin logged out")
-                st.rerun()
-    
-elif selected == "Live Dashboard":
-    st.markdown("### Live Education Statistics • Abia State")
-
-    # Auto-refresh every 60 seconds
-    st_autorefresh(interval=60000, key="live")
-
-    # -------- Load live aggregated data safely --------
-    try:
-        df = get_live_data()
-    except Exception as e:
-        st.error(f"Failed to load live data: {e}")
-        df = pd.DataFrame()
-
-    if df.empty:
-        st.warning("No data available yet or database connection failed.")
-    else:
-        # Ensure numeric safety
-        df['students'] = pd.to_numeric(df['students'], errors='coerce').fillna(0)
-        df['teachers'] = pd.to_numeric(df['teachers'], errors='coerce').fillna(0)
-
-        # Preload school count once
-        try:
-            school_count = pd.read_sql(
-                text("SELECT COUNT(*) AS c FROM school_submissions WHERE approved = TRUE"),
-                con=engine
-            ).iloc[0, 0]
-        except:
-            school_count = 0
-
-        # ----------- Metrics Row -----------
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Students", f"{int(df['students'].sum()):,}")
-        with col2:
-            st.metric("Total Teachers", f"{int(df['teachers'].sum()):,}")
-        with col3:
-            st.metric("Verified Schools", f"{school_count:,}")
-        with col4:
-            st.metric("LGAs", "17", "Complete")
-
-        # ----------- Students by LGA -----------
-        col1, col2 = st.columns(2)
-        with col1:
-            fig = px.bar(
-                df, x='lga_name', y='students', 
-                color='students', color_continuous_scale="Greens",
-                title="Students by LGA"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            fig = px.bar(
-                df, x='lga_name', y='teachers', 
-                color='teachers', color_continuous_scale="Blues",
-                title="Teachers by LGA"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        # ----------- Pie Charts -----------
-        col1, col2 = st.columns(2)
-        with col1:
-            fig = px.pie(
-                df, values='students', names='lga_name', 
-                title="Student Share by LGA"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            fig = px.pie(
-                df, values='teachers', names='lga_name',
-                title="Teacher Share by LGA"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        st.success("ALL 17 LGAs • 100% VERIFIED • LIVE DATA")
-
-    # ------------------- FACILITY CRISIS HEATMAP --------------------
-    st.markdown("### 🟥 Facility Crisis Heatmap Across Abia State")
-
-    if not engine:
-        st.error("Database not connected.")
-        st.stop()
-
-    try:
-        facility_df = pd.read_sql(text("""
-            SELECT 
-                s.lga_name,
-                COUNT(*) AS total_schools,
-                SUM(CASE WHEN COALESCE(s.facilities,'') LIKE '%Toilets (Boys)%' THEN 1 ELSE 0 END) AS has_boys_toilet,
-                SUM(CASE WHEN COALESCE(s.facilities,'') LIKE '%Toilets (Girls)%' THEN 1 ELSE 0 END) AS has_girls_toilet,
-                SUM(CASE WHEN COALESCE(s.facilities,'') LIKE '%Clean Drinking Water%' THEN 1 ELSE 0 END) AS has_water,
-                SUM(CASE WHEN COALESCE(s.facilities,'') LIKE '%Electricity%' THEN 1 ELSE 0 END) AS has_electricity
-            FROM school_submissions s
-            WHERE s.approved = TRUE
-            GROUP BY s.lga_name
-        """), con=engine)
-    except Exception as e:
-        st.error(f"Failed to load facility statistics: {e}")
-        st.stop()
-
-    if not facility_df.empty:
-        # Avoid division by zero
-        facility_df["No Toilet (Boys) %"] = facility_df.apply(
-            lambda x: 100 - round((x["has_boys_toilet"] / x["total_schools"]) * 100, 1)
-            if x["total_schools"] > 0 else 0,
-            axis=1
-        )
-        facility_df["No Toilet (Girls) %"] = facility_df.apply(
-            lambda x: 100 - round((x["has_girls_toilet"] / x["total_schools"]) * 100, 1)
-            if x["total_schools"] > 0 else 0,
-            axis=1
-        )
-        facility_df["No Water %"] = facility_df.apply(
-            lambda x: 100 - round((x["has_water"] / x["total_schools"]) * 100, 1)
-            if x["total_schools"] > 0 else 0,
-            axis=1
-        )
-
-        # ----------- Treemap Visualization -----------
-        fig = px.treemap(
-            facility_df,
-            path=['lga_name'],
-            values='total_schools',
-            color='No Toilet (Boys) %',
-            color_continuous_scale="Reds",
-            title="🚽 LGAs with Highest Toilet Crisis (Darker = Worse)"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        # ----------- Crisis Table -----------
-        st.markdown("### Key Crisis Zones")
-        st.dataframe(
-            facility_df[
-                ["lga_name", "total_schools", 
-                 "No Toilet (Boys) %", "No Toilet (Girls) %", "No Water %"]
-            ].sort_values("No Toilet (Boys) %", ascending=False),
-            use_container_width=True
-        )
+        if st.button("Logout Admin"):
+            st.session_state.admin = False
+            st.rerun()
 
 
 elif selected == "Submit Data":
