@@ -137,29 +137,27 @@ with st.sidebar:
     </style>
     """, unsafe_allow_html=True)
 
-    # ——————————————————————— USER STATUS DISPLAY ———————————————————————
+    # ——————————————————————— USER STATUS DISPLAY (FINAL & CLEAN) ———————————————————————
     if st.session_state.get("user"):
         user = st.session_state.user
-        st.markdown(f"**Logged in as:**")
-        st.success(f"**{user['full_name']}**")
-        
-        if user['user_type'] == 'school':
-            if user['is_approved']:
-                st.info("School Account • Approved")
-            else:
-                st.warning("School Account • Pending Approval")
-        elif user['user_type'] == 'analyst':
-            if user['is_approved']:
-                st.info("Analyst Account • Approved")
-            else:
-                st.warning("Analyst Account • Pending Approval")
 
+        st.markdown("**Logged in as:**")
+        st.success(f"**{user.get('full_name', 'User')}** • {user.get('user_type', 'unknown').title()}")
+
+        # Optional: Show email verified status
+        if user.get("email_verified"):
+            st.caption("Email verified")
+        else:
+            st.caption("Email not verified yet")
+
+        # Logout button
         if st.button("Logout", type="secondary", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                if key not in ["admin"]:  # Keep admin session separate
-                    del st.session_state[key]
+            # Clear only user session, keep admin if present
+            keys_to_clear = [k for k in st.session_state.keys() if k != "admin"]
+            for k in keys_to_clear:
+                del st.session_state[k]
+            st.success("Logged out successfully")
             st.rerun()
-
     # ——————————————————————— ADMIN MENU ———————————————————————
     if st.session_state.get("admin", False):
         selected = option_menu(
