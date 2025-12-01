@@ -542,7 +542,7 @@ elif selected == "Login / Register":
         st.markdown("#### Create New Account")
         st.info("After clicking Create Account, enter the code sent to your email")
 
-        with st.form("register_form", clear_on_submit=True):
+        with st.form("register_form_v2", clear_on_submit=True):
             full_name = st.text_input("Full Name *")
             email = st.text_input("Email Address *").strip().lower()
             password = st.text_input("Password *", type="password")
