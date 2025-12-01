@@ -1271,6 +1271,167 @@ elif selected == "Transparency Ranking":
         st.markdown("---")
         st.caption("Green row = Best performing • Red row = Needs urgent attention")
 
+# ===================== USER MANAGEMENT – FULLY FINAL WITH UNBLOCK + REASON =====================
+elif selected == "User Management":
+    if not st.session_state.get("admin"):
+        st.error("Admin access required")
+        st.stop()
+
+    st.markdown("# User Management")
+    st.markdown("### Block violators • Promote contributors • Reinstate after review")
+
+    if not engine:
+        st.error("Database not connected")
+        st.stop()
+
+    # Load all users
+    try:
+        users = pd.read_sql("""
+            SELECT id, full_name, email, user_type, email_verified, is_blocked, is_admin, created_at
+            FROM users 
+            ORDER BY created_at DESC
+        """, engine)
+    except Exception as e:
+        st.error(f"Failed to load users: {e}")
+        st.stop()
+
+    if users.empty:
+        st.info("No users registered yet.")
+    else:
+        # Stats
+        col1, col2, col3 = st.columns(3)
+        with col1: st.metric("Total Users", len(users))
+        with col2: st.metric("Blocked", len(users[users["is_blocked"]]))
+        with col3: st.metric("Admins", len(users[users["is_admin"]]))
+
+        st.markdown("---")
+
+        for _, user in users.iterrows():
+            status = "Active"
+            if user["is_blocked"]: status = "Blocked"
+            if user["is_admin"]: status = "Admin"
+
+            with st.expander(f"**{user['full_name']}** • {user['email']} • {user['user_type'].title()} • {status}"):
+                col1, col2 = st.columns([2, 3])
+
+                with col1:
+                    st.write(f"**Registered:** {user['created_at'][:10]}")
+                    st.write(f"**Email Verified:** {'Yes' if user['email_verified'] else 'No'}")
+
+                with col2:
+                    # PROMOTE TO ADMIN
+                    if not user["is_admin"]:
+                        with st.form(key=f"promote_form_{user['id']}"):
+                            st.markdown("#### Promote to Admin")
+                            reason = st.text_area("Reason for promotion", placeholder="e.g. High-quality contributions", height=80)
+                            promote = st.form_submit_button("Promote to Admin", type="primary")
+                            if promote:
+                                if not reason.strip():
+                                    st.error("Reason required")
+                                else:
+                                    try:
+                                        with engine.begin() as conn:
+                                            conn.execute(text("UPDATE users SET is_admin = TRUE WHERE id = :id"), {"id": user["id"]})
+                                        body = f"""
+Hello {user['full_name']},
+
+Congratulations! 
+
+You have been promoted to **Administrator** on the Abia State Education Portal.
+
+**Reason:** {reason}
+
+You now have full access to approve submissions and manage users.
+
+Thank you for your dedication!
+
+— Abia Education Portal Administration
+                                        """
+                                        send_email(user['email'], "You Are Now an Administrator!", body)
+                                        st.success("Promoted to admin!")
+                                        st.balloons()
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Failed: {e}")
+
+                    # BLOCK USER
+                    if not user["is_blocked"]:
+                        with st.form(key=f"block_form_{user['id']}"):
+                            st.markdown("#### Block User")
+                            reason = st.text_area("Reason for blocking", placeholder="e.g. Fake data, spam", height=80)
+                            block = st.form_submit_button("Block User", type="secondary")
+                            if block:
+                                if not reason.strip():
+                                    st.error("Reason required")
+                                else:
+                                    try:
+                                        with engine.begin() as conn:
+                                            conn.execute(text("UPDATE users SET is_blocked = TRUE WHERE id = :id"), {"id": user["id"]})
+                                        body = f"""
+Hello {user['full_name']},
+
+Your account has been **blocked** on the Abia State Education Portal.
+
+**Reason:** {reason}
+
+If you believe this is a mistake, please contact the admin team.
+
+— Abia Education Portal Administration
+                                        """
+                                        send_email(user['email'], "Account Blocked", body)
+                                        st.warning("User blocked")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Failed: {e}")
+
+                    # UNBLOCK USER (REINSTATE AFTER REVIEW)
+                    if user["is_blocked"]:
+                        with st.form(key=f"unblock_form_{user['id']}"):
+                            st.markdown("#### Unblock User")
+                            reason = st.text_area("Reason for reinstatement", placeholder="e.g. Account reviewed and cleared", height=80)
+                            unblock = st.form_submit_button("Unblock User", type="primary")
+                            if unblock:
+                                if not reason.strip():
+                                    st.error("Reason required")
+                                else:
+                                    try:
+                                        with engine.begin() as conn:
+                                            conn.execute(text("UPDATE users SET is_blocked = FALSE WHERE id = :id"), {"id": user["id"]})
+                                        body = f"""
+Hello {user['full_name']},
+
+Great news! 
+
+Your account has been **unblocked** on the Abia State Education Portal.
+
+**Reason:** {reason}
+
+You can now log in and continue contributing.
+
+Welcome back!
+
+— Abia Education Portal Administration
+                                        """
+                                        send_email(user['email'], "Account Unblocked", body)
+                                        st.success("User unblocked and reinstated")
+                                        st.balloons()
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Failed: {e}")
+
+                    # REVOKE ADMIN RIGHTS
+                    if user["is_admin"] and user["id"] != st.session_state.user.get("id"):
+                        if st.button("Revoke Admin Rights", key=f"revoke_{user['id']}"):
+                            try:
+                                with engine.begin() as conn:
+                                    conn.execute(text("UPDATE users SET is_admin = FALSE WHERE id = :id"), {"id": user["id"]})
+                                send_email(user['email'], "Admin Rights Revoked", 
+                                    f"Hello {user['full_name']},\n\nYour admin privileges have been revoked.\n\n— Abia Education Portal Administration")
+                                st.info("Admin rights revoked")
+                                st.rerun()
+                            except:
+                                st.error("Failed")
+
 # ---------- ADMIN LOGIN ----------
 elif selected == "Admin Login":
     st.markdown("### Secure Admin Access")
