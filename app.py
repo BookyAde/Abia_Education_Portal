@@ -540,6 +540,130 @@ elif selected == "Login / Register":
                             if "verify_email" in st.session_state:
                                 del st.session_state.verify_email
                             st.rerun()
+    # ============================================================
+    # LOGIN TAB + FORGOT PASSWORD (STRICT & SECURE)
+    # ============================================================
+    with tab_login:
+        st.markdown("#### Login to Your Account")
+
+        with st.form("login_form"):
+            email = st.text_input("Email Address", placeholder="you@abiaschools.edu.ng").strip().lower()
+            password = st.text_input("Password", type="password")
+            col1, col2 = st.columns(2)
+            with col1:
+                login = st.form_submit_button("Login", type="primary")
+            with col2:
+                forgot = st.form_submit_button("Forgot Password?", type="secondary")
+
+            # ——— NORMAL LOGIN ———
+            if login:
+                if not email or not password:
+                    st.error("Fill both fields")
+                elif not engine:
+                    st.error("Database error")
+                else:
+                    df = pd.read_sql(text("SELECT * FROM users WHERE email = :e"), engine, params={"e": email})
+                    if df.empty:
+                        st.error("No account found")
+                    elif hash_password(password) != df.iloc[0]["password_hash"]:
+                        st.error("Wrong password")
+                    elif not df.iloc[0]["email_verified"]:
+                        st.warning("Verify your email first")
+                    elif df.iloc[0]["is_blocked"]:
+                        st.error("Your account is blocked. Contact admin.")
+                    elif not df.iloc[0]["is_approved"]:
+                        st.warning("Pending admin approval")
+                    else:
+                        st.session_state.user = df.iloc[0].to_dict()
+                        st.success(f"Welcome back, {df.iloc[0]['full_name']}!")
+                        st.balloons()
+                        st.rerun()
+
+            # ——— FORGOT PASSWORD → STRICT RESET ———
+            if forgot:
+                if not email:
+                    st.error("Enter your email first")
+                else:
+                    df = pd.read_sql(text("SELECT * FROM users WHERE email = :e"), engine, params={"e": email})
+                    if df.empty:
+                        st.error("No account found with this email")
+                    elif df.iloc[0]["is_blocked"]:
+                        st.error("Blocked accounts cannot reset password")
+                    else:
+                        # Generate secure reset code (6-digit, expires in 15 mins)
+                        reset_code = random.randint(100000, 999999)
+                        expires = pd.Timestamp.now() + pd.Timedelta(minutes=15)
+                        try:
+                            with engine.begin() as conn:
+                                conn.execute(text("""
+                                    UPDATE users 
+                                    SET reset_code = :c, reset_expires = :exp 
+                                    WHERE email = :e
+                                """), {"c": reset_code, "exp": expires, "e": email})
+
+                            body = f"""
+    Hello {df.iloc[0]['full_name']},
+
+    You requested a password reset for your Abia Education Portal account.
+
+    Your reset code: **{reset_code}**
+
+    This code expires in 15 minutes.
+
+    If you didn't request this, ignore this email.
+
+    — Abia Education Portal Security
+                            """
+                            if send_email(email, "Password Reset Code", body):
+                                st.session_state.reset_email = email
+                                st.success("Reset code sent! Check your email")
+                                st.info("Enter the code below to set a new password")
+                                st.balloons()
+                        except Exception as e:
+                            st.error("Failed to send reset code")
+
+        # ——— PASSWORD RESET FORM (APPEARS AFTER CODE IS SENT) ———
+        if st.session_state.get("reset_email"):
+            st.markdown("### Reset Your Password")
+            st.info(f"Code sent to **{st.session_state.reset_email}**")
+
+            with st.form("reset_form"):
+                code = st.text_input("Enter 6-digit reset code", max_chars=6)
+                new_password = st.text_input("New Password", type="password")
+                confirm = st.text_input("Confirm New Password", type="password")
+                reset_btn = st.form_submit_button("Reset Password", type="primary")
+
+                if reset_btn:
+                    if not code.isdigit():
+                        st.error("Invalid code")
+                    elif new_password != confirm:
+                        st.error("Passwords don't match")
+                    elif len(new_password) < 6:
+                        st.error("Password too short")
+                    else:
+                        user = pd.read_sql(text("""
+                            SELECT * FROM users 
+                            WHERE email = :e AND reset_code = :c AND reset_expires > NOW()
+                        """), engine, params={"e": st.session_state.reset_email, "c": int(code)})
+                        if user.empty:
+                            st.error("Invalid or expired code")
+                        else:
+                            try:
+                                with engine.begin() as conn:
+                                    conn.execute(text("""
+                                        UPDATE users 
+                                        SET password_hash = :p, reset_code = NULL, reset_expires = NULL 
+                                        WHERE email = :e
+                                    """), {
+                                        "p": hash_password(new_password),
+                                        "e": st.session_state.reset_email
+                                    })
+                                st.success("Password reset successful! You can now log in")
+                                st.balloons()
+                                del st.session_state.reset_email
+                                st.rerun()
+                            except:
+                                st.error("Failed to reset password")
 
     # ============================================================
     # ADMIN LOGIN TAB — SEPARATE & SECURE
