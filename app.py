@@ -444,14 +444,15 @@ elif selected == "Live Dashboard":
     else:
         st.info("No facility data yet — will appear after first submissions")
 
-    # ============ TOILET CRISIS HEATMAP (SAFE) ============
+    # ============ TOILET CRISIS HEATMAP (100% FIXED) ============
     st.markdown("### Toilet Crisis Heatmap")
     if not facility_df.empty and facility_df["total_schools"].sum() > 0:
         facility_df["Toilet Crisis %"] = (facility_df["missing_boys_toilet"] / facility_df["total_schools"] * 100).round(1)
+        
         fig = px.treemap(
             facility_df,
             path=['lga_name'],
-            values='total_schools,
+            values='total_schools',                    # ← CORRECT
             color='Toilet Crisis %',
             color_continuous_scale="Reds",
             title="LGA Toilet Crisis (Darker = More Schools Without Toilets)"
