@@ -385,6 +385,69 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
 
     st.markdown("</div>", unsafe_allow_html=True)
 
+#-----------------------------------------------------------------------
+# ===================== LIVE DASHBOARD =====================
+#-----------------------------------------------------------------------
+elif selected == "Live Dashboard":
+    st.markdown("# Live Education Dashboard • Abia State")
+    st.markdown("**Real-time • Verified • Transparent** • Updated every minute")
+
+    # Auto-refresh
+    st_autorefresh(interval=60000, key="datarefresh")
+
+    # Load data
+    df = get_live_data()
+    if df.empty:
+        st.error("No data yet")
+        st.stop()
+
+    # TOTAL METRICS
+    col1, col2, col3, col4 = st.columns(4)
+    with col1: st.metric("Total Students", f"{int(df['students'].sum()):,}")
+    with col2: st.metric("Total Teachers", f"{int(df['teachers'].sum()):,}")
+    with col3: st.metric("Verified Schools", f"{pd.read_sql('SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE', engine).iloc[0,0]:,}")
+    with col4: st.metric("Average Pupil-Teacher Ratio", f"{round(df['ratio'].mean(),1):.1f}")
+
+    # CRISIS SUMMARY (BIG RED CARDS)
+    st.markdown("### Critical Facility Gaps")
+    facility_df = pd.read_sql("""
+        SELECT 
+            SUM(CASE WHEN facilities LIKE '%Toilets (Boys)%' THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS no_boys_toilet_pct,
+            SUM(CASE WHEN facilities LIKE '%Clean Drinking Water%' THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS no_water_pct
+        FROM school_submissions WHERE approved = TRUE
+    """, engine)
+
+    if not facility_df.empty:
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.error(f"**{facility_df['no_boys_toilet_pct'].iloc[0]:.0f}%** of schools have **no boys toilet**")
+        with c2:
+            st.error(f"**{facility_df['no_water_pct'].iloc[0]:.0f}%** of schools have **no clean water**")
+        with c3:
+            st.warning("Immediate action required")
+
+    # CRISIS HEATMAP (FULL WIDTH)
+    st.markdown("### 🚽 Toilet Crisis Heatmap")
+    fig = px.treemap(facility_df, path=['lga_name'], values='total_schools',
+                     color='No Toilet (Boys) %', color_continuous_scale="Reds")
+    st.plotly_chart(fig, use_container_width=True)
+
+    # LGA LEADERBOARD
+    st.markdown("### 🏆 LGA Transparency Ranking")
+    ranking = pd.read_sql("""
+        SELECT lga_name, COUNT(*) AS verified_schools
+        FROM school_submissions WHERE approved = TRUE
+        GROUP BY lga_name ORDER BY verified_schools DESC
+    """, engine)
+    ranking["Rank"] = range(1, len(ranking)+1)
+    st.dataframe(ranking.style.background_gradient(cmap="Greens"), use_container_width=True)
+
+    # SUBMISSION ACTIVITY
+    st.markdown("### Recent Activity")
+    recent = pd.read_sql("SELECT submitted_at FROM school_submissions WHERE approved=TRUE ORDER BY submitted_at DESC LIMIT 10", engine)
+    if not recent.empty:
+        st.line_chart(recent.set_index("submitted_at"))
+
 # ===================== FINAL: LOGIN + REGISTER + ADMIN + PASSWORD RESET + VERIFICATION =====================
 elif selected == "Login / Register":
     st.markdown("# Account Login & Registration")
