@@ -391,62 +391,96 @@ if selected == "Home" or selected is None:  # ← Critical fix: shows on first l
 elif selected == "Live Dashboard":
     st.markdown("# Live Education Dashboard • Abia State")
     st.markdown("**Real-time • Verified • Transparent** • Updated every minute")
+    st_autorefresh(interval=60000, key="dashboard_refresh")
 
-    # Auto-refresh
-    st_autorefresh(interval=60000, key="datarefresh")
+    # ============ SAFELY LOAD DATA ============
+    try:
+        df = get_live_data()
+        total_schools = pd.read_sql("SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE", engine).iloc[0,0]
 
-    # Load data
-    df = get_live_data()
-    if df.empty:
-        st.error("No data yet")
+        # Facility data
+        facility_df = pd.read_sql(text("""
+            SELECT 
+                s.lga_name,
+                COUNT(*) AS total_schools,
+                SUM(CASE WHEN COALESCE(s.facilities,'') LIKE '%Toilets (Boys)%' THEN 0 ELSE 1 END) AS missing_boys_toilet,
+                SUM(CASE WHEN COALESCE(s.facilities,'') LIKE '%Clean Drinking Water%' THEN 0 ELSE 1 END) AS missing_water
+            FROM school_submissions s 
+            WHERE s.approved = TRUE 
+            GROUP BY s.lga_name
+        """), engine)
+
+        # Recent submissions
+        recent = pd.read_sql("""
+            SELECT DATE(submitted_at) as date, COUNT(*) as count 
+            FROM school_submissions 
+            WHERE approved = TRUE AND submitted_at >= NOW() - INTERVAL '7 days'
+            GROUP BY date ORDER BY date
+        """, engine)
+
+    except Exception as e:
+        st.error(f"Database error: {e}")
         st.stop()
 
-    # TOTAL METRICS
+    # ============ TOP METRICS ============
     col1, col2, col3, col4 = st.columns(4)
-    with col1: st.metric("Total Students", f"{int(df['students'].sum()):,}")
-    with col2: st.metric("Total Teachers", f"{int(df['teachers'].sum()):,}")
-    with col3: st.metric("Verified Schools", f"{pd.read_sql('SELECT COUNT(*) FROM school_submissions WHERE approved=TRUE', engine).iloc[0,0]:,}")
-    with col4: st.metric("Average Pupil-Teacher Ratio", f"{round(df['ratio'].mean(),1):.1f}")
+    with col1: st.metric("Total Students", f"{int(df['students'].sum()):,}" if df['students'].sum() > 0 else "0")
+    with col2: st.metric("Total Teachers", f"{int(df['teachers'].sum()):,}" if df['teachers'].sum() > 0 else "0")
+    with col3: st.metric("Verified Schools", f"{total_schools:,}")
+    with col4: 
+        avg_ratio = df['ratio'].mean() if not df.empty else 0
+        st.metric("Avg Pupil-Teacher Ratio", f"{avg_ratio:.1f}")
 
-    # CRISIS SUMMARY (BIG RED CARDS)
-    st.markdown("### Critical Facility Gaps")
-    facility_df = pd.read_sql("""
-        SELECT 
-            SUM(CASE WHEN facilities LIKE '%Toilets (Boys)%' THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS no_boys_toilet_pct,
-            SUM(CASE WHEN facilities LIKE '%Clean Drinking Water%' THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS no_water_pct
-        FROM school_submissions WHERE approved = TRUE
-    """, engine)
+    # ============ CRISIS ALERTS (SAFE) ============
+    if not facility_df.empty and facility_df["total_schools"].sum() > 0:
+        no_toilet_pct = (facility_df["missing_boys_toilet"].sum() / facility_df["total_schools"].sum()) * 100
+        no_water_pct = (facility_df["missing_water"].sum() / facility_df["total_schools"].sum()) * 100
 
-    if not facility_df.empty:
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.error(f"**{facility_df['no_boys_toilet_pct'].iloc[0]:.0f}%** of schools have **no boys toilet**")
-        with c2:
-            st.error(f"**{facility_df['no_water_pct'].iloc[0]:.0f}%** of schools have **no clean water**")
-        with c3:
-            st.warning("Immediate action required")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.error(f"**{no_toilet_pct:.0f}%** of schools have **no boys toilet**")
+        with col2:
+            st.error(f"**{no_water_pct:.0f}%** of schools have **no clean water**")
+    else:
+        st.info("No facility data yet — will appear after first submissions")
 
-    # CRISIS HEATMAP (FULL WIDTH)
-    st.markdown("### 🚽 Toilet Crisis Heatmap")
-    fig = px.treemap(facility_df, path=['lga_name'], values='total_schools',
-                     color='No Toilet (Boys) %', color_continuous_scale="Reds")
-    st.plotly_chart(fig, use_container_width=True)
+    # ============ TOILET CRISIS HEATMAP (SAFE) ============
+    st.markdown("### Toilet Crisis Heatmap")
+    if not facility_df.empty and facility_df["total_schools"].sum() > 0:
+        facility_df["Toilet Crisis %"] = (facility_df["missing_boys_toilet"] / facility_df["total_schools"] * 100).round(1)
+        fig = px.treemap(
+            facility_df,
+            path=['lga_name'],
+            values='total_schools,
+            color='Toilet Crisis %',
+            color_continuous_scale="Reds",
+            title="LGA Toilet Crisis (Darker = More Schools Without Toilets)"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Toilet crisis map will appear when schools submit facility data")
 
-    # LGA LEADERBOARD
-    st.markdown("### 🏆 LGA Transparency Ranking")
-    ranking = pd.read_sql("""
-        SELECT lga_name, COUNT(*) AS verified_schools
-        FROM school_submissions WHERE approved = TRUE
-        GROUP BY lga_name ORDER BY verified_schools DESC
-    """, engine)
-    ranking["Rank"] = range(1, len(ranking)+1)
-    st.dataframe(ranking.style.background_gradient(cmap="Greens"), use_container_width=True)
+    # ============ STUDENTS & TEACHERS BY LGA ============
+    if not df.empty:
+        col1, col2 = st.columns(2)
+        with col1:
+            fig1 = px.bar(df.sort_values("students", ascending=False), x="lga_name", y="students", color="students", color_continuous_scale="Greens")
+            st.plotly_chart(fig1, use_container_width=True)
+        with col2:
+            fig2 = px.bar(df.sort_values("teachers", ascending=False), x="lga_name", y="teachers", color="teachers", color_continuous_scale="Blues")
+            st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("Charts will appear when schools submit data")
 
-    # SUBMISSION ACTIVITY
-    st.markdown("### Recent Activity")
-    recent = pd.read_sql("SELECT submitted_at FROM school_submissions WHERE approved=TRUE ORDER BY submitted_at DESC LIMIT 10", engine)
+    # ============ RECENT ACTIVITY ============
+    st.markdown("### Recent Submission Activity")
     if not recent.empty:
-        st.line_chart(recent.set_index("submitted_at"))
+        fig = px.line(recent, x="date", y="count", title="Daily Submissions (Last 7 Days)")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No submissions in the last 7 days")
+
+    st.success("LIVE • VERIFIED • ABIA STATE")
 
 # ===================== FINAL: LOGIN + REGISTER + ADMIN + PASSWORD RESET + VERIFICATION =====================
 elif selected == "Login / Register":
