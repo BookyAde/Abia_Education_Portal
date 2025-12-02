@@ -938,6 +938,12 @@ elif selected == "Request Data":
     if st.button("Generate & Download Excel", type="primary", use_container_width=True):
         try:
             output = io.BytesIO()
+
+            # ✅ FIX: Remove timezone before writing to Excel
+            for col in filtered.columns:
+                if pd.api.types.is_datetime64tz_dtype(filtered[col]):
+                    filtered[col] = filtered[col].dt.tz_localize(None)
+
             with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
                 filtered.to_excel(writer, index=False, sheet_name="Abia_Education_Data")
 
@@ -968,6 +974,7 @@ elif selected == "Request Data":
 
         except Exception as e:
             st.error(f"Failed to generate Excel file: {e}")
+
 
 
 
